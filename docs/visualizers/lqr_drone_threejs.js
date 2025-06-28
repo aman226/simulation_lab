@@ -1,4 +1,5 @@
-export const LQRDroneVisualizer = {
+
+export const Visualizer = {
     isInitialized: false,
     scene: null,
     camera: null,
@@ -49,7 +50,7 @@ export const LQRDroneVisualizer = {
     },
 
 
-    updateDroneState: function(state) {
+    updateState: function(state) {
         if (!this.isInitialized) return;
         if (!state.position || !state.quaternion) return;
 

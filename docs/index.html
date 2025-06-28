@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrbitingIdeas - Simulator Lab (Generic Pyodide)</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
-    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/loaders/GLTFLoader.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
@@ -104,49 +106,123 @@
     </footer>
 
     <script>
+        
         (function() {
             'use strict';
-
+            
             const DEBUG_MODE = true; 
             const SIM_DT = 0.02; 
             const PYODIDE_PACKAGES = ['numpy', 'scipy']; // Common packages for Pyodide sims
-
-            // --- SIMULATORS_CONFIG ---
-            // This is where you define all your simulators.
-            // Each Pyodide simulator must have type: 'pyodide' and a pythonScriptURL.]
-            
+           
             const SIMULATORS_CONFIG = [
+                // {
+                // id: 'lqr_drone', 
+                // name: 'LQR Drone Sim (Client)', 
+                // icon: 'plane-takeoff',
+                // type: 'pyodide', 
+                // pythonScriptURL: './simulators/lqr_drone_simulation_py.py',
+                // visualizerModuleURL: './visualizers/lqr_drone_threejs.js',
+                // initialState: {
+                //     position: [0.0, 0.0, 0.0],
+                //     velocity: [0.0, 0.0, 0.0],
+                //     quaternion: [1.0, 0.0, 0.0, 0.0],
+                //     angular_velocity: [0.0, 0.0, 0.0],
+                //     target_position_z: 1.0  // make sure to include this too!
+                // },
+                // controls: [
+                //     {
+                //     id: 'target_z',
+                //     label: 'Target Z (m)',
+                //     type: 'range',
+                //     min: 0.5,
+                //     max: 5,
+                //     value: 1.0,
+                //     step: 0.1,
+                //     unit: 'm',
+                //     pyParameterName: 'target_position_z'
+                //     }
+                // ],
+                // actions: [
+                //     {
+                //     id: 'reset_sim',
+                //     label: 'RESET SIMULATION',
+                //     icon: 'refresh-cw',
+                //     pyActionId: 'reset_to_initial_config'
+                //     },
+                //     {
+                //         id: 'stop_sim',
+                //         label: 'STOP SIMULATION',
+                //         icon: 'square',
+                //         pyActionId: null
+                //     }
+                // ],
+                // telemetry: [
+                //     'Position X (m)', 
+                //     'Position Y (m)', 
+                //     'Position Z (m)', 
+                //     'Roll (deg)', 
+                //     'Pitch (deg)', 
+                //     'Yaw (deg)', 
+                //     'quaternion',               
+                //     'Sim Step Time (ms)'
+                // ]
+                // },
+                
                 {
-                id: 'lqr_drone', 
-                name: 'LQR Drone Sim (Client)', 
-                icon: 'plane-takeoff',
-                type: 'pyodide', 
-                pythonScriptURL: './simulators/lqr_drone_simulation_py.py',
-                visualizerModuleURL: './visualizers/lqr_drone_threejs.js',
-                initialState: {
-                    position: [0.0, 0.0, 0.0],
-                    velocity: [0.0, 0.0, 0.0],
-                    quaternion: [1.0, 0.0, 0.0, 0.0],
-                    angular_velocity: [0.0, 0.0, 0.0],
-                    target_position_z: 1.0  // make sure to include this too!
-                },
+                id: 'satellite_sim',
+                name: 'LEO Satellite Simulator',
+                icon: 'satellite-dish',
+                type: 'pyodide',
+                pythonScriptURL: './simulators/satellite_sim.py',
+                visualizerModuleURL: './visualizers/satellite_threejs.js',
+                initialState: {},
+
                 controls: [
                     {
-                    id: 'target_z',
-                    label: 'Target Z (m)',
-                    type: 'range',
-                    min: 0.5,
-                    max: 5,
-                    value: 1.0,
-                    step: 0.1,
-                    unit: 'm',
-                    pyParameterName: 'target_position_z'
+                        id: 'kp',
+                        label: 'Proportional Gain (Kp)',
+                        type: 'range',
+                        min: 0,
+                        max: 10,
+                        value: 0.08,
+                        step: 0.01,
+                        pyParameterName: 'kp'
+                    },
+                    
+                    {
+                        id: "ki",
+                        label: "Integral Gain (ki)",
+                        type: "range",
+                        min: 0.0,
+                        max: 5.0,
+                        step: 0.01,
+                        value: 0.0,
+                        pyParameterName: "ki"
+                    },
+
+                    {
+                        id: 'kd',
+                        label: 'Derivative Gain (Kd)',
+                        type: 'range',
+                        min: 0,
+                        max: 10,
+                        value: 0.44,
+                        step: 0.01,
+                        pyParameterName: 'kd'
+                    },
+
+                    {
+                        id: "q_desired",
+                        label: "Desired Attitude (Y, P, R)",
+                        type: "vector4_euler",
+                        default: [0, 0, 0],
+                        pyParameterName: "q_desired"
                     }
                 ],
                 actions: [
                     {
                     id: 'reset_sim',
-                    label: 'RESET SIMULATION',
+                    label: 'RESET ORBIT',
                     icon: 'refresh-cw',
                     pyActionId: 'reset_to_initial_config'
                     },
@@ -158,27 +234,21 @@
                     }
                 ],
                 telemetry: [
-                    'Position X (m)', 
-                    'Position Y (m)', 
-                    'Position Z (m)', 
-                    'Roll (deg)', 
-                    'Pitch (deg)', 
-                    'Yaw (deg)', 
-                    'quaternion',               // ✅ add this line
+                    "Time (s)",
+                    "Radius (m)",
+                    "Latitude (deg)",
+                    "Longitude (deg)",
+                    "Radial Velocity (m/s)",
+                    "Tangential Velocity (m/s)",
+                    "Azimuth (deg)",
+                    "quaternion",
+                    "Position X (m)",
+                    "Position Y (m)",
+                    "Position Z (m)",
                     'Sim Step Time (ms)'
                 ]
-                },
-                // Example of a future WebSocket-based simulator (not implemented here)
-                // {
-                // id: 'rocket_launch_ws',
-                // name: 'Rocket Launch (Server)',
-                // icon: 'rocket',
-                // type: 'websocket', // This would trigger different handling
-                // wsEndpoint: 'ws://localhost:8766/rocket_sim',
-                // controls: [/* ... */],
-                // actions: [/* ... */],
-                // telemetry: [/* ... */]
-                // }
+                }
+
             ];
 
             let currentSimConfig = null; // Holds the config of the currently selected simulator
@@ -204,14 +274,15 @@
             };
 
             function log(message, ...args) { if (DEBUG_MODE) console.log(`[SimLab] ${message}`, ...args)}
-            function logError(message, ...args) { console.error(`[SimLab ERROR] ${message}`, ...args); UI.displayError(message); } // Also show in UI
+            function logError(message, ...args) { console.error(`[SimLab ERROR] ${message}`, ...args); UI.displayError(message); } // Also show in U
+            function eulerToQuaternion(yaw, pitch, roll) {const cy = Math.cos(yaw * 0.5 * Math.PI / 180);const sy = Math.sin(yaw * 0.5 * Math.PI / 180);const cp = Math.cos(pitch * 0.5 * Math.PI / 180);const sp = Math.sin(pitch * 0.5 * Math.PI / 180);const cr = Math.cos(roll * 0.5 * Math.PI / 180);const sr = Math.sin(roll * 0.5 * Math.PI / 180);return [cr * cp * cy + sr * sp * sy, sr * cp * cy - cr * sp * sy, cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy];}
 
             const UI = { /* ... (UI methods mostly same as before, minor adjustments for clarity) ... */
                 init: function() { log("UI Init"); try { lucide.createIcons(); } catch (e) { logError("Lucide init fail", e); } DOMElements.currentYear.textContent = new Date().getFullYear(); },
                 populateSimulatorList: function(sims, cb) { DOMElements.simulatorList.innerHTML = ''; sims.forEach(s => { let b = document.createElement('button'); b.className = 'w-full text-left p-3 rounded-md simulator-item border-l-4 border-transparent transition-all duration-150 ease-in-out flex items-center group focus:outline-none focus:ring-2 focus:ring-blue-500'; b.innerHTML = `<i data-lucide="${s.icon||'box'}" class="mr-3 h-5 w-5 text-gray-400 group-hover:text-blue-400"></i><span class="flex-grow">${s.name}</span><i data-lucide="chevron-right" class="h-4 w-4 text-gray-500 group-hover:text-blue-300"></i>`; b.onclick=()=>cb(s); DOMElements.simulatorList.appendChild(b); }); try { lucide.createIcons(); } catch (e) { logError("Lucide dynamic icon fail", e); } },
                 updateSimulatorSelectionDisplay: function(name) { Array.from(DOMElements.simulatorList.children).forEach(c => { const t = c.querySelector('span.flex-grow')?.textContent.trim(); c.classList.toggle('active-simulator', t === name); c.querySelector('span.flex-grow')?.classList.toggle('font-bold', t === name); }); },
                 showSimulationView: function() { DOMElements.viewportPlaceholder.classList.add('hidden'); DOMElements.simulationCanvas.classList.remove('hidden'); },
-                populateControls: function(sim, actionCb, controlCb) { DOMElements.controlsPlaceholder.classList.add('hidden'); DOMElements.activeControls.classList.remove('hidden'); DOMElements.activeControls.innerHTML = ''; if(sim.controls) sim.controls.forEach(c => { let d=document.createElement('div'); d.className='mb-3'; if(c.type==='range'){let id=`${sim.id}_${c.id}`; d.innerHTML=`<label for="${id}" class="text-sm">${c.label}</label><input type="range" id="${id}" name="${c.id}" min="${c.min}" max="${c.max}" value="${c.value}" step="${c.step||1}" class="mt-1"><p class="text-xs text-right"><span id="${id}Value" class="telemetry-value">${c.value}</span> ${c.unit||''}</p>`; DOMElements.activeControls.appendChild(d); document.getElementById(id).addEventListener('input',e=>{document.getElementById(`${id}Value`).textContent=e.target.value; controlCb(sim.id,c.id,parseFloat(e.target.value),c.pyParameterName);});}}); if(sim.actions) sim.actions.forEach(a => { let b=document.createElement('button'); b.id=`${sim.id}_${a.id}`; b.className='w-full p-2 mt-2 btn-primary flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400'; b.innerHTML=`<i data-lucide="${a.icon||'play'}" class="mr-2 h-4 w-4"></i> ${a.label}`; b.onclick=()=>actionCb(sim.id,a.id,a.pyActionId,a.pyActionParams); DOMElements.activeControls.appendChild(b);}); try { lucide.createIcons(); } catch (e) { logError("Lucide control icon fail", e); } },
+                populateControls: function(sim, actionCb, controlCb) { DOMElements.controlsPlaceholder.classList.add('hidden'); DOMElements.activeControls.classList.remove('hidden');DOMElements.activeControls.innerHTML = '';if (sim.controls) {sim.controls.forEach(c => {let d = document.createElement('div');d.className = 'mb-3';let id = `${sim.id}_${c.id}`;if (c.type === 'range') {d.innerHTML = `<label for="${id}" class="text-sm">${c.label}</label><input type="range" id="${id}" name="${c.id}" min="${c.min}" max="${c.max}" value="${c.value}" step="${c.step || 1}" class="mt-1"><p class="text-xs text-right"><span id="${id}Value" class="telemetry-value">${c.value}</span> ${c.unit || ''}</p>`;DOMElements.activeControls.appendChild(d);document.getElementById(id).addEventListener('input', e => {document.getElementById(`${id}Value`).textContent = e.target.value;controlCb(sim.id, c.id, parseFloat(e.target.value), c.pyParameterName);});}if (c.type === 'vector4_euler') {d.innerHTML = `<label class="text-sm block mb-2">${c.label}</label><div class="flex flex-wrap gap-2">`;['Yaw', 'Pitch', 'Roll'].forEach((axis, i) => {const inputId = `${id}_${axis.toLowerCase()}`;d.innerHTML += `<div class="flex flex-col items-start"><label for="${inputId}" class="text-xs mb-1">${axis}</label><input type="number" id="${inputId}" step="1" class="w-24 p-1 text-black bg-white rounded" value="${c.default[i]}"></div>`;});d.innerHTML += `</div>`;DOMElements.activeControls.appendChild(d);['yaw', 'pitch', 'roll'].forEach(axis => {const input = document.getElementById(`${id}_${axis}`);input.addEventListener('input', () => {const yaw = parseFloat(document.getElementById(`${id}_yaw`).value) * Math.PI / 180;const pitch = parseFloat(document.getElementById(`${id}_pitch`).value) * Math.PI / 180;const roll = parseFloat(document.getElementById(`${id}_roll`).value) * Math.PI / 180;if (isNaN(yaw) || isNaN(pitch) || isNaN(roll)) return;const cy = Math.cos(yaw * 0.5), sy = Math.sin(yaw * 0.5);const cp = Math.cos(pitch * 0.5), sp = Math.sin(pitch * 0.5);const cr = Math.cos(roll * 0.5), sr = Math.sin(roll * 0.5);const qw = cy * cp * cr + sy * sp * sr;const qx = cy * cp * sr - sy * sp * cr;const qy = sy * cp * sr + cy * sp * cr;const qz = sy * cp * cr - cy * sp * sr;controlCb(sim.id, c.id, [qw, qx, qy, qz], c.pyParameterName);});});}});}if (sim.actions) {sim.actions.forEach(a => {let b = document.createElement('button');b.id = `${sim.id}_${a.id}`;b.className = 'w-full p-2 mt-2 btn-primary flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400';b.innerHTML = `<i data-lucide="${a.icon || 'play'}" class="mr-2 h-4 w-4"></i> ${a.label}`;b.onclick = () => actionCb(sim.id, a.id, a.pyActionId, a.pyActionParams);DOMElements.activeControls.appendChild(b);});}try { lucide.createIcons(); } catch (e) { logError("Lucide control icon fail", e); }},
                 populateTelemetry: function(sim) { DOMElements.telemetryPlaceholder.classList.add('hidden'); DOMElements.activeTelemetry.classList.remove('hidden'); DOMElements.activeTelemetry.innerHTML = ''; if(sim.telemetry) sim.telemetry.forEach(item => { let p=document.createElement('p'); let idSuffix=item.toLowerCase().replace(/[^a-z0-9_]/g,'_'); p.innerHTML=`${item}: <span id="telemetry_${sim.id}_${idSuffix}" class="telemetry-value">N/A</span>`; DOMElements.activeTelemetry.appendChild(p);}); },
                 updateTelemetryDisplay: function(simId, payload) { for(const k in payload){ if(payload.hasOwnProperty(k)){ let idSuffix=k.toLowerCase().replace(/[^a-z0-9_]/g,'_'); let el=document.getElementById(`telemetry_${simId}_${idSuffix}`); if(el) el.textContent=payload[k];}}},
                 displayError: function(msg) { DOMElements.errorDisplayArea.classList.remove('hidden'); let p=document.createElement('p'); p.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`; DOMElements.errorMessages.appendChild(p); while(DOMElements.errorMessages.children.length > 5) DOMElements.errorMessages.removeChild(DOMElements.errorMessages.firstChild); },
@@ -263,7 +334,7 @@
                         this.isReady = true;
                         log(`Pyodide: Initialization complete for ${pythonScriptURL}. Python environment ready.`);
                         UI.updateEngineStatus('READY', 'green', 'status-online');
-                        //UI.clearErrorDisplay();
+                        UI.clearErrorDisplay();
                         return true;
 
                     } catch (error) {
@@ -306,7 +377,7 @@
 
                     try {
                         const module = await import(moduleURL);
-                        this.visualizerModule = module.LQRDroneVisualizer || module.default;
+                        this.visualizerModule = module.Visualizer;
                         await this.visualizerModule.init(canvas);
                         this.currentModuleURL = moduleURL;
                         this.isInitialized = true;
@@ -317,9 +388,9 @@
                     }
                 },
 
-                updateDroneState: function(state) {
-                    if (this.isInitialized && this.visualizerModule && this.visualizerModule.updateDroneState) {
-                        this.visualizerModule.updateDroneState(state);
+                updateState: function(state) {
+                    if (this.isInitialized && this.visualizerModule && this.visualizerModule.updateState) {
+                        this.visualizerModule.updateState(state);
                     }
                 },
 
@@ -351,7 +422,7 @@
                     UI.populateControls(simConfig, this.handleActionTrigger.bind(this), this.handleControlUpdate.bind(this));
                     UI.populateTelemetry(simConfig);
                     
-                    // 👇 Dynamically load visualizer based on simulator configuration
+
                     if(simConfig.visualizerModuleURL){
                         await ThreeJSVisualizer.init(DOMElements.simulationCanvas, simConfig.visualizerModuleURL);
                     } else {
@@ -388,7 +459,6 @@
                     const currentTime = performance.now();
                     // const actualDt = (currentTime - lastSimStepTime) / 1000.0; // Can be used for monitoring
                     lastSimStepTime = currentTime;
-
                     // Standardized Python function call
                     const pythonResult = PyodideService.callPython('update_simulation_step', [SIM_DT, {}]); // Pass empty controls dict for now
 
@@ -405,7 +475,7 @@
 
                 handlePythonSimState: function(state) {
                     if (!state || !currentSimConfig) return;
-                    ThreeJSVisualizer.updateDroneState(state); 
+                    ThreeJSVisualizer.updateState(state); 
                     // The telemetry payload is the state itself. UI.updateTelemetryDisplay will pick keys.
                     // Ensure Python state dict keys are mappable to telemetry item names in config.
                     UI.updateTelemetryDisplay(currentSimConfig.id, state);

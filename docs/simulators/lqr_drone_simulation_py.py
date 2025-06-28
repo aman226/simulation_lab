@@ -45,11 +45,11 @@ def update_simulation_step(dt, controls):
     global simulation_state
 
     # Simple Z controller
-    kp = 1.5
+    kp = 0.005
     target_z = simulation_state['target_position_z']
     error_z = target_z - simulation_state['position'][2]
 
-    simulation_state['velocity'][2] += kp * error_z * dt
+    simulation_state['velocity'][2] = kp * error_z
     simulation_state['position'] += simulation_state['velocity'] * dt
 
     # Gentle pitch oscillation for visualization
@@ -67,6 +67,6 @@ def update_simulation_step(dt, controls):
         "Roll (deg)": 0.0,
         "Pitch (deg)": round(np.degrees(pitch_angle), 2),
         "Yaw (deg)": 0.0,
-        "quaternion": simulation_state["quaternion"].tolist(),
+        "quaternion": [round(val, 4) for val in simulation_state["quaternion"]],
         "position": simulation_state["position"].tolist(),   # ← ADD THIS
     }
