@@ -1,1 +1,392 @@
-<meta http-equiv="Refresh" content="0; url=simulation_lab.html" />
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrbitingIdeas - Simulator Lab (Generic Pyodide)</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
+    <style>
+        body { font-family: 'Share Tech Mono', monospace; background-color: #0A0F1A; color: #E0E0E0; overflow: hidden; }
+        .glassmorphism { background: rgba(12, 20, 39, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(0, 190, 255, 0.2); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
+        .active-simulator { background-color: #00BEFF; color: #0A0F1A; border-left-width: 4px; border-left-color: #80DFFF; }
+        .active-simulator:hover { background-color: #00A5DF; }
+        .simulator-item:hover { background-color: #1A2C47; border-left-color: #00BEFF; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0A0F1A; }
+        ::-webkit-scrollbar-thumb { background: #007BFF; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #0056b3; }
+        .telemetry-value { color: #00BEFF; font-weight: bold; }
+        .control-panel input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: #1A2C47; outline: none; opacity: 0.9; transition: opacity .2s; border-radius: 4px; }
+        .control-panel input[type="range"]:hover { opacity: 1; }
+        .control-panel input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #00BEFF; cursor: pointer; border-radius: 50%; border: 2px solid #0A0F1A; }
+        .control-panel input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: #00BEFF; cursor: pointer; border-radius: 50%; border: 2px solid #0A0F1A; }
+        .btn-primary { background-color: #007BFF; color: white; transition: background-color 0.3s ease; border: 1px solid #0056b3; }
+        .btn-primary:hover { background-color: #0056b3; }
+        .status-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .status-online { background-color: #39FF14; }
+        .status-offline { background-color: #FF3131; }
+        .status-standby { background-color: #FFFF33; }
+        .error-message-area { background-color: rgba(255, 49, 49, 0.1); border: 1px solid rgba(255, 49, 49, 0.3); color: #FF8A8A; padding: 8px; border-radius: 4px; margin-top: 10px; font-size: 0.8rem; max-height: 100px; overflow-y: auto; }
+        .loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(10, 15, 26, 0.8); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .loading-text { color: #00BEFF; margin-top: 10px; font-size: 1.2em; }
+        .spinner { border: 4px solid rgba(0, 190, 255, 0.2); border-left-color: #00BEFF; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <header class="bg-black/30 glassmorphism text-white p-3 shadow-lg border-b border-blue-500/30 flex items-center justify-between">
+        <div class="flex items-center">
+            <i data-lucide="orbit" class="mr-3 text-blue-400 h-8 w-8"></i>
+            <h1 class="text-2xl tracking-wider">ORBITINGIDEAS SIMULATOR LAB</h1>
+        </div>
+        <div class="flex items-center text-sm">
+            <span class="mr-2">SIM ENGINE:</span>
+            <span id="connectionIndicator" class="status-indicator status-standby"></span>
+            <span id="connectionStatus" class="text-yellow-400">AWAITING SELECTION</span>
+        </div>
+    </header>
+
+    <main class="flex-grow flex overflow-hidden">
+        <aside class="w-1/5 glassmorphism p-4 space-y-3 overflow-y-auto border-r border-blue-500/30">
+            <h2 class="text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2">SIMULATORS</h2>
+            <div id="simulatorList"></div>
+        </aside>
+
+        <section id="simulationViewport" class="flex-grow w-3/5 bg-black/50 flex flex-col items-center justify-center relative overflow-hidden p-2">
+            <div id="viewportPlaceholder" class="text-center text-gray-500">
+                <i data-lucide="scan-eye" class="h-24 w-24 mx-auto mb-4"></i>
+                <p class="text-xl">SIMULATION VIEWER OFFLINE</p>
+                <p>Select a simulator to initialize.</p>
+            </div>
+            <canvas id="simulationCanvas" class="hidden w-full h-full"></canvas>
+            <div id="loadingOverlay" class="loading-overlay hidden">
+                <div class="spinner"></div>
+                <p id="loadingStatusText" class="loading-text">Loading Simulation Environment...</p>
+            </div>
+        </section>
+
+        <aside class="w-1/5 glassmorphism p-4 space-y-4 overflow-y-auto border-l border-blue-500/30">
+            <div id="simulatorControlsContainer">
+                <h2 class="text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2">CONTROLS</h2>
+                <div id="controlsPlaceholder" class="text-gray-500 text-sm">
+                    <i data-lucide="sliders-horizontal" class="h-6 w-6 mx-auto mb-2"></i>
+                    <p>Controls will appear here.</p>
+                </div>
+                <div id="activeControls" class="hidden space-y-4 control-panel"></div>
+            </div>
+
+            <div id="telemetryContainer" class="mt-6">
+                <h2 class="text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2">TELEMETRY</h2>
+                <div id="telemetryPlaceholder" class="text-gray-500 text-sm">
+                    <i data-lucide="activity" class="h-6 w-6 mx-auto mb-2"></i>
+                    <p>Telemetry data will stream here.</p>
+                </div>
+                <div id="activeTelemetry" class="hidden space-y-2 text-sm"></div>
+            </div>
+            <div id="errorDisplayArea" class="error-message-area hidden">
+                <h3 class="font-semibold text-red-300 text-sm mb-1">System Alerts:</h3>
+                <div id="errorMessages"></div>
+            </div>
+        </aside>
+    </main>
+
+    <footer class="bg-black/50 text-xs text-center p-2 border-t border-blue-500/30 text-gray-500">
+        &copy; <span id="currentYear"></span> OrbitingIdeas Advanced Simulation Division. All rights reserved.
+    </footer>
+
+    <script>
+        (function() {
+            'use strict';
+
+            const DEBUG_MODE = true; 
+            const SIM_DT = 0.02; 
+            const PYODIDE_PACKAGES = ['numpy', 'scipy']; // Common packages for Pyodide sims
+
+            // --- SIMULATORS_CONFIG ---
+            // This is where you define all your simulators.
+            // Each Pyodide simulator must have type: 'pyodide' and a pythonScriptURL.
+            const SIMULATORS_CONFIG = [
+                { 
+                    id: 'lqr_drone_pyodide', 
+                    name: 'LQR Drone Sim (Client)', 
+                    icon: 'plane-takeoff',
+                    type: 'pyodide', // Crucial for routing to PyodideService
+                    pythonScriptURL: './lqr_drone_simulation_py.py', // Path to YOUR Python script
+                    initialState: { // Passed to Python's setup_simulation
+                        position: [0.5, -0.3, 1.5],
+                        velocity: [0.0, 0.0, 0.0],
+                        quaternion: [0.98329, 0.08682, -0.06905, -0.14904], // Approx 10deg roll, -8deg pitch
+                        angular_velocity: [0.0, 0.0, 0.0]
+                    },
+                    targetState: { // Initial target, can be updated by controls
+                        position: [0.0, 0.0, 1.0],
+                        velocity: [0.0, 0.0, 0.0],
+                        euler_angles_rad: [0.0, 0.0, 0.0], 
+                        angular_velocity: [0.0, 0.0, 0.0]
+                    },
+                    controls: [
+                         { id: 'target_z', label: 'Target Z (m)', type: 'range', min: 0.5, max: 5, value: 1.0, step: 0.1, unit: 'm',
+                           pyParameterName: 'target_position_z' // Python's set_simulation_parameter will receive this name
+                         },
+                         // Add more controls as needed, e.g., for target X, Y, Yaw
+                    ], 
+                    actions: [
+                        {id: 'reset_sim', label: 'RESET SIMULATION', icon: 'refresh-cw',
+                         pyActionId: 'reset_to_initial_config' // Python's handle_action_command receives this
+                        }
+                    ],
+                    // Telemetry display names. Python's update_simulation_step should return a dict
+                    // where keys can be transformed to match these (e.g., 'Position X (m)' -> 'position_x_m')
+                    telemetry: ['Position X (m)', 'Position Y (m)', 'Position Z (m)', 'Roll (deg)', 'Pitch (deg)', 'Yaw (deg)', 'Sim Step Time (ms)']
+                },
+                // Example of a future WebSocket-based simulator (not implemented here)
+                // {
+                // id: 'rocket_launch_ws',
+                // name: 'Rocket Launch (Server)',
+                // icon: 'rocket',
+                // type: 'websocket', // This would trigger different handling
+                // wsEndpoint: 'ws://localhost:8766/rocket_sim',
+                // controls: [/* ... */],
+                // actions: [/* ... */],
+                // telemetry: [/* ... */]
+                // }
+            ];
+
+            let currentSimConfig = null; // Holds the config of the currently selected simulator
+            let currentPythonSimState = null; // Holds the latest state from Python for Pyodide sims
+            let animationFrameId = null;
+            let lastSimStepTime = 0;
+
+            const DOMElements = { /* ... (same as before) ... */
+                simulatorList: document.getElementById('simulatorList'),
+                viewportPlaceholder: document.getElementById('viewportPlaceholder'),
+                simulationCanvas: document.getElementById('simulationCanvas'),
+                controlsPlaceholder: document.getElementById('controlsPlaceholder'),
+                activeControls: document.getElementById('activeControls'),
+                telemetryPlaceholder: document.getElementById('telemetryPlaceholder'),
+                activeTelemetry: document.getElementById('activeTelemetry'),
+                connectionStatus: document.getElementById('connectionStatus'),
+                connectionIndicator: document.getElementById('connectionIndicator'),
+                errorDisplayArea: document.getElementById('errorDisplayArea'),
+                errorMessages: document.getElementById('errorMessages'),
+                currentYear: document.getElementById('currentYear'),
+                loadingOverlay: document.getElementById('loadingOverlay'),
+                loadingStatusText: document.getElementById('loadingStatusText')
+            };
+
+            function log(message, ...args) { if (DEBUG_MODE) console.log(`[SimLab] ${message}`, ...args); }
+            function logError(message, ...args) { console.error(`[SimLab ERROR] ${message}`, ...args); UI.displayError(message); } // Also show in UI
+
+            const UI = { /* ... (UI methods mostly same as before, minor adjustments for clarity) ... */
+                init: function() { log("UI Init"); try { lucide.createIcons(); } catch (e) { logError("Lucide init fail", e); } DOMElements.currentYear.textContent = new Date().getFullYear(); },
+                populateSimulatorList: function(sims, cb) { DOMElements.simulatorList.innerHTML = ''; sims.forEach(s => { let b = document.createElement('button'); b.className = 'w-full text-left p-3 rounded-md simulator-item border-l-4 border-transparent transition-all duration-150 ease-in-out flex items-center group focus:outline-none focus:ring-2 focus:ring-blue-500'; b.innerHTML = `<i data-lucide="${s.icon||'box'}" class="mr-3 h-5 w-5 text-gray-400 group-hover:text-blue-400"></i><span class="flex-grow">${s.name}</span><i data-lucide="chevron-right" class="h-4 w-4 text-gray-500 group-hover:text-blue-300"></i>`; b.onclick=()=>cb(s); DOMElements.simulatorList.appendChild(b); }); try { lucide.createIcons(); } catch (e) { logError("Lucide dynamic icon fail", e); } },
+                updateSimulatorSelectionDisplay: function(name) { Array.from(DOMElements.simulatorList.children).forEach(c => { const t = c.querySelector('span.flex-grow')?.textContent.trim(); c.classList.toggle('active-simulator', t === name); c.querySelector('span.flex-grow')?.classList.toggle('font-bold', t === name); }); },
+                showSimulationView: function() { DOMElements.viewportPlaceholder.classList.add('hidden'); DOMElements.simulationCanvas.classList.remove('hidden'); },
+                populateControls: function(sim, actionCb, controlCb) { DOMElements.controlsPlaceholder.classList.add('hidden'); DOMElements.activeControls.classList.remove('hidden'); DOMElements.activeControls.innerHTML = ''; if(sim.controls) sim.controls.forEach(c => { let d=document.createElement('div'); d.className='mb-3'; if(c.type==='range'){let id=`${sim.id}_${c.id}`; d.innerHTML=`<label for="${id}" class="text-sm">${c.label}</label><input type="range" id="${id}" name="${c.id}" min="${c.min}" max="${c.max}" value="${c.value}" step="${c.step||1}" class="mt-1"><p class="text-xs text-right"><span id="${id}Value" class="telemetry-value">${c.value}</span> ${c.unit||''}</p>`; DOMElements.activeControls.appendChild(d); document.getElementById(id).addEventListener('input',e=>{document.getElementById(`${id}Value`).textContent=e.target.value; controlCb(sim.id,c.id,parseFloat(e.target.value),c.pyParameterName);});}}); if(sim.actions) sim.actions.forEach(a => { let b=document.createElement('button'); b.id=`${sim.id}_${a.id}`; b.className='w-full p-2 mt-2 btn-primary flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400'; b.innerHTML=`<i data-lucide="${a.icon||'play'}" class="mr-2 h-4 w-4"></i> ${a.label}`; b.onclick=()=>actionCb(sim.id,a.id,a.pyActionId,a.pyActionParams); DOMElements.activeControls.appendChild(b);}); try { lucide.createIcons(); } catch (e) { logError("Lucide control icon fail", e); } },
+                populateTelemetry: function(sim) { DOMElements.telemetryPlaceholder.classList.add('hidden'); DOMElements.activeTelemetry.classList.remove('hidden'); DOMElements.activeTelemetry.innerHTML = ''; if(sim.telemetry) sim.telemetry.forEach(item => { let p=document.createElement('p'); let idSuffix=item.toLowerCase().replace(/[^a-z0-9_]/g,'_'); p.innerHTML=`${item}: <span id="telemetry_${sim.id}_${idSuffix}" class="telemetry-value">N/A</span>`; DOMElements.activeTelemetry.appendChild(p);}); },
+                updateTelemetryDisplay: function(simId, payload) { for(const k in payload){ if(payload.hasOwnProperty(k)){ let idSuffix=k.toLowerCase().replace(/[^a-z0-9_]/g,'_'); let el=document.getElementById(`telemetry_${simId}_${idSuffix}`); if(el) el.textContent=payload[k];}}},
+                displayError: function(msg) { DOMElements.errorDisplayArea.classList.remove('hidden'); let p=document.createElement('p'); p.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`; DOMElements.errorMessages.appendChild(p); while(DOMElements.errorMessages.children.length > 5) DOMElements.errorMessages.removeChild(DOMElements.errorMessages.firstChild); },
+                updateEngineStatus: function(text, statusClass, indicator) { DOMElements.connectionStatus.textContent=text; DOMElements.connectionStatus.className=`text-${statusClass}-400`; DOMElements.connectionIndicator.className=`status-indicator ${indicator}`; },
+                showLoadingOverlay: function(msg) { DOMElements.loadingStatusText.textContent = msg || "Loading..."; DOMElements.loadingOverlay.classList.remove('hidden'); },
+                hideLoadingOverlay: function() { DOMElements.loadingOverlay.classList.add('hidden'); },
+                clearErrorDisplay: function() { DOMElements.errorDisplayArea.classList.add('hidden'); DOMElements.errorMessages.innerHTML = ''; }
+            };
+
+            const PyodideService = {
+                pyodide: null,
+                isReady: false,
+                isLoading: false,
+                currentScriptURL: null,
+
+                init: async function(pythonScriptURL) {
+                    if (this.isLoading) { log("Pyodide: Already loading."); return false; }
+                    // Only fully re-init if script URL changes or not ready
+                    if (this.isReady && this.currentScriptURL === pythonScriptURL) {
+                        log("Pyodide: Already initialized with this script.");
+                        return true;
+                    }
+                    
+                    this.isLoading = true;
+                    this.isReady = false; // Reset readiness for new script or first load
+                    this.currentScriptURL = pythonScriptURL;
+                    UI.showLoadingOverlay("Loading Pyodide runtime...");
+                    UI.updateEngineStatus('LOADING PYODIDE', 'yellow', 'status-standby');
+
+                    try {
+                        if (!this.pyodide) { // Load Pyodide core only once
+                            log("Pyodide: Loading Pyodide main package...");
+                            this.pyodide = await loadPyodide();
+                            UI.showLoadingOverlay("Pyodide runtime loaded. Loading Python packages...");
+                            log("Pyodide: Loading packages:", PYODIDE_PACKAGES);
+                            await this.pyodide.loadPackage(PYODIDE_PACKAGES);
+                        }
+                        
+                        UI.showLoadingOverlay(`Fetching Python script: ${pythonScriptURL.split('/').pop()}`);
+                        log(`Pyodide: Fetching Python script from ${pythonScriptURL}`);
+                        const response = await fetch(pythonScriptURL);
+                        if (!response.ok) throw new Error(`Fetch script failed (${response.status}): ${pythonScriptURL}`);
+                        const pythonScriptText = await response.text();
+                        
+                        UI.showLoadingOverlay("Executing Python simulation script...");
+                        // Running the script makes its global functions available
+                        await this.pyodide.runPythonAsync(pythonScriptText); 
+                        
+                        this.isReady = true;
+                        log(`Pyodide: Initialization complete for ${pythonScriptURL}. Python environment ready.`);
+                        UI.updateEngineStatus('READY', 'green', 'status-online');
+                        UI.clearErrorDisplay();
+                        return true;
+
+                    } catch (error) {
+                        logError("Pyodide Init Error:", error.message, error);
+                        UI.updateEngineStatus('ERROR', 'red', 'status-offline');
+                        this.isReady = false;
+                        return false;
+                    } finally {
+                        this.isLoading = false;
+                        UI.hideLoadingOverlay();
+                    }
+                },
+
+                callPython: function(funcName, args = []) {
+                    if (!this.isReady || !this.pyodide) { logError("Pyodide not ready to call:", funcName); return null; }
+                    try {
+                        const pyFunc = this.pyodide.globals.get(funcName);
+                        if (typeof pyFunc !== 'function') throw new Error(`Python func '${funcName}' not found.`);
+                        // Pyodide handles basic JS array/obj to Python list/dict conversion for args.
+                        // For complex args, might need pyodide.toPy().
+                        let result = pyFunc(...args); 
+                        if (result && typeof result.toJs === 'function') {
+                            return result.toJs({ dict_converter: Object.fromEntries });
+                        }
+                        return result; 
+                    } catch (error) { logError(`Error calling Python.${funcName}:`, error.message, error); return null; }
+                }
+            };
+            
+            const ThreeJSVisualizer = { /* ... (Placeholder - same as before) ... */
+                isInitialized: false, scene: null, camera: null, renderer: null, droneModel: null,
+                init: function(canvas) { if(this.isInitialized) return; log("ThreeJS: Init (placeholder)"); /* TODO */ this.isInitialized = true; },
+                updateDroneState: function(state) { if(!this.isInitialized) return; /* TODO: Use state.position, state.quaternion */ },
+                dispose: function() { if(!this.isInitialized) return; log("ThreeJS: Dispose (placeholder)"); /* TODO */ this.isInitialized = false; }
+            };
+
+            const App = {
+                isSimRunning: false,
+                
+                init: function() { log("App: Init"); UI.init(); UI.populateSimulatorList(SIMULATORS_CONFIG, this.handleSimulatorSelection.bind(this)); UI.updateEngineStatus('AWAITING SELECTION', 'yellow', 'status-standby'); },
+
+                handleSimulatorSelection: async function(simConfig) {
+                    log(`App: Selecting sim - ${simConfig.name}`);
+                    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                    this.isSimRunning = false;
+                    currentPythonSimState = null;
+                    currentSimConfig = simConfig;
+
+                    UI.updateSimulatorSelectionDisplay(simConfig.name);
+                    UI.showSimulationView();
+                    UI.populateControls(simConfig, this.handleActionTrigger.bind(this), this.handleControlUpdate.bind(this));
+                    UI.populateTelemetry(simConfig);
+                    ThreeJSVisualizer.dispose(); 
+                    ThreeJSVisualizer.init(DOMElements.simulationCanvas);
+
+                    if (simConfig.type === 'pyodide') {
+                        if (!simConfig.pythonScriptURL) { logError("Pyodide sim config missing 'pythonScriptURL'"); return; }
+                        
+                        const pyodideReady = await PyodideService.init(simConfig.pythonScriptURL);
+                        if (!pyodideReady) { logError("Failed to init Pyodide for " + simConfig.name); return; }
+
+                        log(`App: Initializing Python sim module for ${simConfig.name}...`);
+                        // Standardized Python function call
+                        const setupResult = PyodideService.callPython('setup_simulation', [simConfig.initialState || {}]);
+                        log(`App: Python setup_simulation result: ${setupResult}`);
+                        
+                        this.isSimRunning = true;
+                        lastSimStepTime = performance.now();
+                        this.runClientSideSimulationLoop();
+
+                    } else if (simConfig.type === 'websocket') {
+                        logError("WebSocket simulators not yet implemented in this version.");
+                        UI.updateEngineStatus('WS_UNSUPPORTED', 'red', 'status-offline');
+                    } else {
+                        logError("Unknown simulator type:", simConfig.type);
+                        UI.updateEngineStatus('TYPE_UNKNOWN', 'red', 'status-offline');
+                    }
+                },
+
+                runClientSideSimulationLoop: function() {
+                    if (!this.isSimRunning || !currentSimConfig || currentSimConfig.type !== 'pyodide') {
+                        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                        return;
+                    }
+                    const currentTime = performance.now();
+                    // const actualDt = (currentTime - lastSimStepTime) / 1000.0; // Can be used for monitoring
+                    lastSimStepTime = currentTime;
+
+                    // Standardized Python function call
+                    const pythonResult = PyodideService.callPython('update_simulation_step', [SIM_DT, {}]); // Pass empty controls dict for now
+
+                    if (pythonResult) {
+                        currentPythonSimState = pythonResult; 
+                        this.handlePythonSimState(pythonResult);
+                    }
+                    
+                    const stepTimeMs = performance.now() - currentTime;
+                    UI.updateTelemetryDisplay(currentSimConfig.id, {'Sim Step Time (ms)': stepTimeMs.toFixed(1)});
+
+                    animationFrameId = requestAnimationFrame(this.runClientSideSimulationLoop.bind(this));
+                },
+
+                handlePythonSimState: function(state) {
+                    if (!state || !currentSimConfig) return;
+                    ThreeJSVisualizer.updateDroneState(state); 
+                    // The telemetry payload is the state itself. UI.updateTelemetryDisplay will pick keys.
+                    // Ensure Python state dict keys are mappable to telemetry item names in config.
+                    UI.updateTelemetryDisplay(currentSimConfig.id, state);
+                },
+
+                handleControlUpdate: function(simId, controlId, value, pyParameterName) {
+                    log(`App: Control update - Sim: ${simId}, Control: ${controlId}, Value: ${value}, PyParam: ${pyParameterName}`);
+                    if (currentSimConfig && currentSimConfig.id === simId && currentSimConfig.type === 'pyodide') {
+                        if (pyParameterName) {
+                            // Standardized Python function call
+                            PyodideService.callPython('set_simulation_parameter', [pyParameterName, value]);
+                        } else {
+                            logError(`Control '${controlId}' for sim '${simId}' is missing 'pyParameterName' in config.`);
+                        }
+                    }
+                },
+
+                handleActionTrigger: function(simId, actionId, pyActionId, pyActionParams) {
+                    log(`App: Action trigger - Sim: ${simId}, Action: ${actionId}, PyAction: ${pyActionId}`);
+                    if (currentSimConfig && currentSimConfig.id === simId && currentSimConfig.type === 'pyodide') {
+                        if (pyActionId) {
+                            // Standardized Python function call
+                            PyodideService.callPython('handle_action_command', [pyActionId, pyActionParams || {}]);
+                            // If it's a reset, re-initialize the Python state via setup
+                            if (pyActionId.toLowerCase().includes('reset')) {
+                                PyodideService.callPython('setup_simulation', [currentSimConfig.initialState || {}]);
+                                if (!this.isSimRunning) { // If sim was paused/stopped, restart loop
+                                   this.isSimRunning = true;
+                                   lastSimStepTime = performance.now();
+                                   this.runClientSideSimulationLoop();
+                                }
+                            }
+                        } else {
+                            logError(`Action '${actionId}' for sim '${simId}' is missing 'pyActionId' in config.`);
+                        }
+                    }
+                }
+            };
+
+            document.addEventListener('DOMContentLoaded', () => App.init());
+        })();
+    </script>
+</body>
+</html>
