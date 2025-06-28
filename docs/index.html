@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrbitingIdeas - Simulator Lab (Generic Pyodide)</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
-    
+    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
@@ -40,9 +40,13 @@
 <body class="flex flex-col h-screen">
 
     <header class="bg-black/30 glassmorphism text-white p-3 shadow-lg border-b border-blue-500/30 flex items-center justify-between">
-        <div class="flex items-center">
-            <i data-lucide="orbit" class="mr-3 text-blue-400 h-8 w-8"></i>
+        <div class="flex items-center space-x-4">
+            <i data-lucide="orbit" class="text-blue-400 h-8 w-8"></i>
             <h1 class="text-2xl tracking-wider">ORBITINGIDEAS SIMULATOR LAB</h1>
+            <a href="https://www.orbitingideas.com"
+            class="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md border border-blue-400 shadow transition-all duration-200">
+                ← Back
+            </a>
         </div>
         <div class="flex items-center text-sm">
             <span class="mr-2">SIM ENGINE:</span>
@@ -109,40 +113,60 @@
 
             // --- SIMULATORS_CONFIG ---
             // This is where you define all your simulators.
-            // Each Pyodide simulator must have type: 'pyodide' and a pythonScriptURL.
+            // Each Pyodide simulator must have type: 'pyodide' and a pythonScriptURL.]
+            
             const SIMULATORS_CONFIG = [
-                { 
-                    id: 'lqr_drone_pyodide', 
-                    name: 'LQR Drone Sim (Client)', 
-                    icon: 'plane-takeoff',
-                    type: 'pyodide', // Crucial for routing to PyodideService
-                    pythonScriptURL: './lqr_drone_simulation_py.py', // Path to YOUR Python script
-                    initialState: { // Passed to Python's setup_simulation
-                        position: [0.5, -0.3, 1.5],
-                        velocity: [0.0, 0.0, 0.0],
-                        quaternion: [0.98329, 0.08682, -0.06905, -0.14904], // Approx 10deg roll, -8deg pitch
-                        angular_velocity: [0.0, 0.0, 0.0]
+                {
+                id: 'lqr_drone', 
+                name: 'LQR Drone Sim (Client)', 
+                icon: 'plane-takeoff',
+                type: 'pyodide', 
+                pythonScriptURL: './simulators/lqr_drone_simulation_py.py',
+                visualizerModuleURL: './visualizers/lqr_drone_threejs.js',
+                initialState: {
+                    position: [0.0, 0.0, 0.0],
+                    velocity: [0.0, 0.0, 0.0],
+                    quaternion: [1.0, 0.0, 0.0, 0.0],
+                    angular_velocity: [0.0, 0.0, 0.0],
+                    target_position_z: 1.0  // make sure to include this too!
+                },
+                controls: [
+                    {
+                    id: 'target_z',
+                    label: 'Target Z (m)',
+                    type: 'range',
+                    min: 0.5,
+                    max: 5,
+                    value: 1.0,
+                    step: 0.1,
+                    unit: 'm',
+                    pyParameterName: 'target_position_z'
+                    }
+                ],
+                actions: [
+                    {
+                    id: 'reset_sim',
+                    label: 'RESET SIMULATION',
+                    icon: 'refresh-cw',
+                    pyActionId: 'reset_to_initial_config'
                     },
-                    targetState: { // Initial target, can be updated by controls
-                        position: [0.0, 0.0, 1.0],
-                        velocity: [0.0, 0.0, 0.0],
-                        euler_angles_rad: [0.0, 0.0, 0.0], 
-                        angular_velocity: [0.0, 0.0, 0.0]
-                    },
-                    controls: [
-                         { id: 'target_z', label: 'Target Z (m)', type: 'range', min: 0.5, max: 5, value: 1.0, step: 0.1, unit: 'm',
-                           pyParameterName: 'target_position_z' // Python's set_simulation_parameter will receive this name
-                         },
-                         // Add more controls as needed, e.g., for target X, Y, Yaw
-                    ], 
-                    actions: [
-                        {id: 'reset_sim', label: 'RESET SIMULATION', icon: 'refresh-cw',
-                         pyActionId: 'reset_to_initial_config' // Python's handle_action_command receives this
-                        }
-                    ],
-                    // Telemetry display names. Python's update_simulation_step should return a dict
-                    // where keys can be transformed to match these (e.g., 'Position X (m)' -> 'position_x_m')
-                    telemetry: ['Position X (m)', 'Position Y (m)', 'Position Z (m)', 'Roll (deg)', 'Pitch (deg)', 'Yaw (deg)', 'Sim Step Time (ms)']
+                    {
+                        id: 'stop_sim',
+                        label: 'STOP SIMULATION',
+                        icon: 'square',
+                        pyActionId: null
+                    }
+                ],
+                telemetry: [
+                    'Position X (m)', 
+                    'Position Y (m)', 
+                    'Position Z (m)', 
+                    'Roll (deg)', 
+                    'Pitch (deg)', 
+                    'Yaw (deg)', 
+                    'quaternion',               // ✅ add this line
+                    'Sim Step Time (ms)'
+                ]
                 },
                 // Example of a future WebSocket-based simulator (not implemented here)
                 // {
@@ -179,7 +203,7 @@
                 loadingStatusText: document.getElementById('loadingStatusText')
             };
 
-            function log(message, ...args) { if (DEBUG_MODE) console.log(`[SimLab] ${message}`, ...args); }
+            function log(message, ...args) { if (DEBUG_MODE) console.log(`[SimLab] ${message}`, ...args)}
             function logError(message, ...args) { console.error(`[SimLab ERROR] ${message}`, ...args); UI.displayError(message); } // Also show in UI
 
             const UI = { /* ... (UI methods mostly same as before, minor adjustments for clarity) ... */
@@ -239,7 +263,7 @@
                         this.isReady = true;
                         log(`Pyodide: Initialization complete for ${pythonScriptURL}. Python environment ready.`);
                         UI.updateEngineStatus('READY', 'green', 'status-online');
-                        UI.clearErrorDisplay();
+                        //UI.clearErrorDisplay();
                         return true;
 
                     } catch (error) {
@@ -269,12 +293,46 @@
                 }
             };
             
-            const ThreeJSVisualizer = { /* ... (Placeholder - same as before) ... */
-                isInitialized: false, scene: null, camera: null, renderer: null, droneModel: null,
-                init: function(canvas) { if(this.isInitialized) return; log("ThreeJS: Init (placeholder)"); /* TODO */ this.isInitialized = true; },
-                updateDroneState: function(state) { if(!this.isInitialized) return; /* TODO: Use state.position, state.quaternion */ },
-                dispose: function() { if(!this.isInitialized) return; log("ThreeJS: Dispose (placeholder)"); /* TODO */ this.isInitialized = false; }
-            };
+            const ThreeJSVisualizer = {
+                isInitialized: false,
+                visualizerModule: null,
+                currentModuleURL: null,
+
+                init: async function(canvas, moduleURL) {
+                    if (this.isInitialized && this.currentModuleURL === moduleURL) return;
+
+                    // Dispose current visualizer if it exists
+                    if (this.isInitialized) this.dispose();
+
+                    try {
+                        const module = await import(moduleURL);
+                        this.visualizerModule = module.LQRDroneVisualizer || module.default;
+                        await this.visualizerModule.init(canvas);
+                        this.currentModuleURL = moduleURL;
+                        this.isInitialized = true;
+                        console.log("Visualizer initialized from", moduleURL);
+                    } catch (e) {
+                        console.error("Visualizer initialization failed:", e);
+                        UI.displayError(`Visualizer Init Error: ${e.message}`);
+                    }
+                },
+
+                updateDroneState: function(state) {
+                    if (this.isInitialized && this.visualizerModule && this.visualizerModule.updateDroneState) {
+                        this.visualizerModule.updateDroneState(state);
+                    }
+                },
+
+                dispose: function() {
+                    if (this.isInitialized && this.visualizerModule && this.visualizerModule.dispose) {
+                        this.visualizerModule.dispose();
+                    }
+                    this.isInitialized = false;
+                    this.visualizerModule = null;
+                    this.currentModuleURL = null;
+                    }
+                };
+
 
             const App = {
                 isSimRunning: false,
@@ -292,8 +350,14 @@
                     UI.showSimulationView();
                     UI.populateControls(simConfig, this.handleActionTrigger.bind(this), this.handleControlUpdate.bind(this));
                     UI.populateTelemetry(simConfig);
-                    ThreeJSVisualizer.dispose(); 
-                    ThreeJSVisualizer.init(DOMElements.simulationCanvas);
+                    
+                    // 👇 Dynamically load visualizer based on simulator configuration
+                    if(simConfig.visualizerModuleURL){
+                        await ThreeJSVisualizer.init(DOMElements.simulationCanvas, simConfig.visualizerModuleURL);
+                    } else {
+                        ThreeJSVisualizer.dispose();
+                        logError("No visualizer module specified for this simulator.");
+                    }
 
                     if (simConfig.type === 'pyodide') {
                         if (!simConfig.pythonScriptURL) { logError("Pyodide sim config missing 'pythonScriptURL'"); return; }
@@ -302,22 +366,18 @@
                         if (!pyodideReady) { logError("Failed to init Pyodide for " + simConfig.name); return; }
 
                         log(`App: Initializing Python sim module for ${simConfig.name}...`);
-                        // Standardized Python function call
                         const setupResult = PyodideService.callPython('setup_simulation', [simConfig.initialState || {}]);
                         log(`App: Python setup_simulation result: ${setupResult}`);
                         
                         this.isSimRunning = true;
                         lastSimStepTime = performance.now();
                         this.runClientSideSimulationLoop();
-
-                    } else if (simConfig.type === 'websocket') {
-                        logError("WebSocket simulators not yet implemented in this version.");
-                        UI.updateEngineStatus('WS_UNSUPPORTED', 'red', 'status-offline');
                     } else {
                         logError("Unknown simulator type:", simConfig.type);
                         UI.updateEngineStatus('TYPE_UNKNOWN', 'red', 'status-offline');
                     }
                 },
+
 
                 runClientSideSimulationLoop: function() {
                     if (!this.isSimRunning || !currentSimConfig || currentSimConfig.type !== 'pyodide') {
@@ -365,12 +425,23 @@
 
                 handleActionTrigger: function(simId, actionId, pyActionId, pyActionParams) {
                     log(`App: Action trigger - Sim: ${simId}, Action: ${actionId}, PyAction: ${pyActionId}`);
+                    
+                    if (actionId === 'stop_sim') {
+                        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                        this.isSimRunning = false;
+                        UI.updateEngineStatus('STOPPED', 'red', 'status-offline');
+                        log("Simulation stopped.");
+                        return;
+                    }
+
                     if (currentSimConfig && currentSimConfig.id === simId && currentSimConfig.type === 'pyodide') {
                         if (pyActionId) {
                             // Standardized Python function call
                             PyodideService.callPython('handle_action_command', [pyActionId, pyActionParams || {}]);
                             // If it's a reset, re-initialize the Python state via setup
                             if (pyActionId.toLowerCase().includes('reset')) {
+                                UI.updateEngineStatus('READY', 'green', 'status-online');
                                 PyodideService.callPython('setup_simulation', [currentSimConfig.initialState || {}]);
                                 if (!this.isSimRunning) { // If sim was paused/stopped, restart loop
                                    this.isSimRunning = true;
