@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OrbitingIdeas - Simulator Lab (Generic Pyodide)</title>
+    <title>OrbitingIdeas - Simulator Lab</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/loaders/GLTFLoader.min.js"></script>
@@ -115,59 +115,6 @@
             const PYODIDE_PACKAGES = ['numpy', 'scipy']; // Common packages for Pyodide sims
            
             const SIMULATORS_CONFIG = [
-                // {
-                // id: 'lqr_drone', 
-                // name: 'LQR Drone Sim (Client)', 
-                // icon: 'plane-takeoff',
-                // type: 'pyodide', 
-                // pythonScriptURL: './simulators/lqr_drone_simulation_py.py',
-                // visualizerModuleURL: './visualizers/lqr_drone_threejs.js',
-                // initialState: {
-                //     position: [0.0, 0.0, 0.0],
-                //     velocity: [0.0, 0.0, 0.0],
-                //     quaternion: [1.0, 0.0, 0.0, 0.0],
-                //     angular_velocity: [0.0, 0.0, 0.0],
-                //     target_position_z: 1.0  // make sure to include this too!
-                // },
-                // controls: [
-                //     {
-                //     id: 'target_z',
-                //     label: 'Target Z (m)',
-                //     type: 'range',
-                //     min: 0.5,
-                //     max: 5,
-                //     value: 1.0,
-                //     step: 0.1,
-                //     unit: 'm',
-                //     pyParameterName: 'target_position_z'
-                //     }
-                // ],
-                // actions: [
-                //     {
-                //     id: 'reset_sim',
-                //     label: 'RESET SIMULATION',
-                //     icon: 'refresh-cw',
-                //     pyActionId: 'reset_to_initial_config'
-                //     },
-                //     {
-                //         id: 'stop_sim',
-                //         label: 'STOP SIMULATION',
-                //         icon: 'square',
-                //         pyActionId: null
-                //     }
-                // ],
-                // telemetry: [
-                //     'Position X (m)', 
-                //     'Position Y (m)', 
-                //     'Position Z (m)', 
-                //     'Roll (deg)', 
-                //     'Pitch (deg)', 
-                //     'Yaw (deg)', 
-                //     'quaternion',               
-                //     'Sim Step Time (ms)'
-                // ]
-                // },
-                
                 {
                 id: 'satellite_sim',
                 name: 'LEO Satellite Simulator',
@@ -256,7 +203,7 @@
             let animationFrameId = null;
             let lastSimStepTime = 0;
 
-            const DOMElements = { /* ... (same as before) ... */
+            const DOMElements = {
                 simulatorList: document.getElementById('simulatorList'),
                 viewportPlaceholder: document.getElementById('viewportPlaceholder'),
                 simulationCanvas: document.getElementById('simulationCanvas'),

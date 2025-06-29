@@ -24,18 +24,28 @@ export const Visualizer = {
 
     // Load space skybox
     this.scene.background = new THREE.CubeTextureLoader().load([
-    './skybox/bkg1_right1.png',  // px
-    './skybox/bkg1_left2.png',   // nx
-    './skybox/bkg1_top3.png',    // py
-    './skybox/bkg1_bottom4.png', // ny
-    './skybox/bkg1_front5.png',  // pz
-    './skybox/bkg1_back6.png'    // nz
+    './skybox/space/bkg1_right1.png',  // px
+    './skybox/space/bkg1_left2.png',   // nx
+    './skybox/space/bkg1_top3.png',    // py
+    './skybox/space/bkg1_bottom4.png', // ny
+    './skybox/space/bkg1_front5.png',  // pz
+    './skybox/space/bkg1_back6.png'    // nz
     ]);
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     this.renderer.setPixelRatio(window.devicePixelRatio);
 
+    // this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // this.renderer.outputEncoding = THREE.sRGBEncoding;
+
+    // // Load .hdr file
+    // new THREE.RGBELoader()
+    //   .load('./skybox/sky/DarkStorm4K.hdr', (texture) => {
+    //     texture.mapping = THREE.EquirectangularReflectionMapping;
+    //     this.scene.background = texture;
+    //     this.scene.environment = texture;
+    //   });
     // OrbitControls
     this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -74,6 +84,13 @@ export const Visualizer = {
     const trailLine = new THREE.Line(this.trailGeometry, this.trailMaterial);
     this.scene.add(trailLine);
     this.isInitialized = true;
+
+    window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    });
+
     this.render();
   },
 
