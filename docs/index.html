@@ -11,44 +11,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
-    <style>
-        body { font-family: 'Share Tech Mono', monospace; background-color: #0A0F1A; color: #E0E0E0; overflow: hidden; }
-        .glassmorphism { background: rgba(12, 20, 39, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(0, 190, 255, 0.2); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
-        .active-simulator { background-color: #00BEFF; color: #0A0F1A; border-left-width: 4px; border-left-color: #80DFFF; }
-        .active-simulator:hover { background-color: #00A5DF; }
-        .simulator-item:hover { background-color: #1A2C47; border-left-color: #00BEFF; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0A0F1A; }
-        ::-webkit-scrollbar-thumb { background: #007BFF; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #0056b3; }
-        .telemetry-value { color: #00BEFF; font-weight: bold; }
-        .control-panel input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: #1A2C47; outline: none; opacity: 0.9; transition: opacity .2s; border-radius: 4px; }
-        .control-panel input[type="range"]:hover { opacity: 1; }
-        .control-panel input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #00BEFF; cursor: pointer; border-radius: 50%; border: 2px solid #0A0F1A; }
-        .control-panel input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: #00BEFF; cursor: pointer; border-radius: 50%; border: 2px solid #0A0F1A; }
-        .btn-primary { background-color: #007BFF; color: white; transition: background-color 0.3s ease; border: 1px solid #0056b3; }
-        .btn-primary:hover { background-color: #0056b3; }
-        .status-indicator { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .status-online { background-color: #39FF14; }
-        .status-offline { background-color: #FF3131; }
-        .status-standby { background-color: #FFFF33; }
-        .error-message-area { background-color: rgba(255, 49, 49, 0.1); border: 1px solid rgba(255, 49, 49, 0.3); color: #FF8A8A; padding: 8px; border-radius: 4px; margin-top: 10px; font-size: 0.8rem; max-height: 100px; overflow-y: auto; }
-        .loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(10, 15, 26, 0.8); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .loading-text { color: #00BEFF; margin-top: 10px; font-size: 1.2em; }
-        .spinner { border: 4px solid rgba(0, 190, 255, 0.2); border-left-color: #00BEFF; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="flex flex-col h-screen">
-
     <header class="bg-black/30 glassmorphism text-white p-3 shadow-lg border-b border-blue-500/30 flex items-center justify-between">
         <div class="flex items-center space-x-4">
             <i data-lucide="orbit" class="text-blue-400 h-8 w-8"></i>
             <h1 class="text-2xl tracking-wider">ORBITINGIDEAS SIMULATOR LAB</h1>
-            <a href="https://www.orbitingideas.com"
-            class="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md border border-blue-400 shadow transition-all duration-200">
-                ← Back
-            </a>
+            <a href="https://www.orbitingideas.com" class="px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-md border border-blue-400 shadow transition-all duration-200">← Back</a>
         </div>
         <div class="flex items-center text-sm">
             <span class="mr-2">SIM ENGINE:</span>
@@ -84,6 +54,9 @@
                     <p>Controls will appear here.</p>
                 </div>
                 <div id="activeControls" class="hidden space-y-4 control-panel"></div>
+                <button id="openParameterManagerBtn" class="w-full btn-primary p-2 mt-3 flex items-center justify-center">
+                    <i data-lucide="settings" class="mr-2 h-4 w-4"></i> Parameters
+                </button>
             </div>
 
             <div id="telemetryContainer" class="mt-6">
@@ -102,379 +75,23 @@
     </main>
 
     <footer class="bg-black/50 text-xs text-center p-2 border-t border-blue-500/30 text-gray-500">
-        &copy; <span id="currentYear"></span> OrbitingIdeas
+        © <span id="currentYear"></span> OrbitingIdeas
     </footer>
 
-    <script>
-        
-        (function() {
-            'use strict';
-            
-            const DEBUG_MODE = true; 
-            const SIM_DT = 0.02; 
-            const PYODIDE_PACKAGES = ['numpy', 'scipy']; // Common packages for Pyodide sims
-           
-            const SIMULATORS_CONFIG = [
-                {
-                id: 'satellite_sim',
-                name: 'LEO Satellite Simulator',
-                icon: 'satellite-dish',
-                type: 'pyodide',
-                pythonScriptURL: './simulators/satellite_sim.py',
-                visualizerModuleURL: './visualizers/satellite_threejs.js',
-                initialState: {},
+    <div id="parameterManagerModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-60 flex items-center justify-center">
+        <div class="bg-[#162032] p-6 rounded-xl shadow-2xl min-w-[350px] max-w-[95vw] w-full max-w-md">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold text-blue-200">Edit Simulation Parameters</h2>
+                <button id="closeParameterManagerBtn" class="text-gray-400 hover:text-red-400 text-2xl">×</button>
+            </div>
+            <form id="parameterForm" class="space-y-3 max-h-72 overflow-y-auto"></form>
+            <div class="flex gap-2 mt-4">
+                <button id="addParameterBtn" class="btn-primary flex-1" type="button">+ Add Parameter</button>
+                <button id="saveParametersBtn" class="btn-primary flex-1" type="button">Save</button>
+            </div>
+        </div>
+    </div>
 
-                controls: [
-                    {
-                        id: 'kp',
-                        label: 'Proportional Gain (Kp)',
-                        type: 'range',
-                        min: 0,
-                        max: 10,
-                        value: 0.08,
-                        step: 0.01,
-                        pyParameterName: 'kp'
-                    },
-                    
-                    {
-                        id: "ki",
-                        label: "Integral Gain (ki)",
-                        type: "range",
-                        min: 0.0,
-                        max: 5.0,
-                        step: 0.01,
-                        value: 0.0,
-                        pyParameterName: "ki"
-                    },
-
-                    {
-                        id: 'kd',
-                        label: 'Derivative Gain (Kd)',
-                        type: 'range',
-                        min: 0,
-                        max: 10,
-                        value: 0.44,
-                        step: 0.01,
-                        pyParameterName: 'kd'
-                    },
-
-                    {
-                        id: "q_desired",
-                        label: "Desired Attitude (Y, P, R)",
-                        type: "vector4_euler",
-                        default: [0, 0, 0],
-                        pyParameterName: "q_desired"
-                    }
-                ],
-                actions: [
-                    {
-                    id: 'reset_sim',
-                    label: 'RESET ORBIT',
-                    icon: 'refresh-cw',
-                    pyActionId: 'reset_to_initial_config'
-                    },
-                    {
-                        id: 'stop_sim',
-                        label: 'STOP SIMULATION',
-                        icon: 'square',
-                        pyActionId: null
-                    }
-                ],
-                telemetry: [
-                    "Time (s)",
-                    "Radius (m)",
-                    "Latitude (deg)",
-                    "Longitude (deg)",
-                    "Radial Velocity (m/s)",
-                    "Tangential Velocity (m/s)",
-                    "Azimuth (deg)",
-                    "quaternion",
-                    "Position X (m)",
-                    "Position Y (m)",
-                    "Position Z (m)",
-                    'Sim Step Time (ms)'
-                ]
-                }
-
-            ];
-
-            let currentSimConfig = null; // Holds the config of the currently selected simulator
-            let currentPythonSimState = null; // Holds the latest state from Python for Pyodide sims
-            let animationFrameId = null;
-            let lastSimStepTime = 0;
-
-            const DOMElements = {
-                simulatorList: document.getElementById('simulatorList'),
-                viewportPlaceholder: document.getElementById('viewportPlaceholder'),
-                simulationCanvas: document.getElementById('simulationCanvas'),
-                controlsPlaceholder: document.getElementById('controlsPlaceholder'),
-                activeControls: document.getElementById('activeControls'),
-                telemetryPlaceholder: document.getElementById('telemetryPlaceholder'),
-                activeTelemetry: document.getElementById('activeTelemetry'),
-                connectionStatus: document.getElementById('connectionStatus'),
-                connectionIndicator: document.getElementById('connectionIndicator'),
-                errorDisplayArea: document.getElementById('errorDisplayArea'),
-                errorMessages: document.getElementById('errorMessages'),
-                currentYear: document.getElementById('currentYear'),
-                loadingOverlay: document.getElementById('loadingOverlay'),
-                loadingStatusText: document.getElementById('loadingStatusText')
-            };
-
-            function log(message, ...args) { if (DEBUG_MODE) console.log(`[SimLab] ${message}`, ...args)}
-            function logError(message, ...args) { console.error(`[SimLab ERROR] ${message}`, ...args); UI.displayError(message); } // Also show in U
-            function eulerToQuaternion(yaw, pitch, roll) {const cy = Math.cos(yaw * 0.5 * Math.PI / 180);const sy = Math.sin(yaw * 0.5 * Math.PI / 180);const cp = Math.cos(pitch * 0.5 * Math.PI / 180);const sp = Math.sin(pitch * 0.5 * Math.PI / 180);const cr = Math.cos(roll * 0.5 * Math.PI / 180);const sr = Math.sin(roll * 0.5 * Math.PI / 180);return [cr * cp * cy + sr * sp * sy, sr * cp * cy - cr * sp * sy, cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy];}
-
-            const UI = { /* ... (UI methods mostly same as before, minor adjustments for clarity) ... */
-                init: function() { log("UI Init"); try { lucide.createIcons(); } catch (e) { logError("Lucide init fail", e); } DOMElements.currentYear.textContent = new Date().getFullYear(); },
-                populateSimulatorList: function(sims, cb) { DOMElements.simulatorList.innerHTML = ''; sims.forEach(s => { let b = document.createElement('button'); b.className = 'w-full text-left p-3 rounded-md simulator-item border-l-4 border-transparent transition-all duration-150 ease-in-out flex items-center group focus:outline-none focus:ring-2 focus:ring-blue-500'; b.innerHTML = `<i data-lucide="${s.icon||'box'}" class="mr-3 h-5 w-5 text-gray-400 group-hover:text-blue-400"></i><span class="flex-grow">${s.name}</span><i data-lucide="chevron-right" class="h-4 w-4 text-gray-500 group-hover:text-blue-300"></i>`; b.onclick=()=>cb(s); DOMElements.simulatorList.appendChild(b); }); try { lucide.createIcons(); } catch (e) { logError("Lucide dynamic icon fail", e); } },
-                updateSimulatorSelectionDisplay: function(name) { Array.from(DOMElements.simulatorList.children).forEach(c => { const t = c.querySelector('span.flex-grow')?.textContent.trim(); c.classList.toggle('active-simulator', t === name); c.querySelector('span.flex-grow')?.classList.toggle('font-bold', t === name); }); },
-                showSimulationView: function() { DOMElements.viewportPlaceholder.classList.add('hidden'); DOMElements.simulationCanvas.classList.remove('hidden'); },
-                populateControls: function(sim, actionCb, controlCb) { DOMElements.controlsPlaceholder.classList.add('hidden'); DOMElements.activeControls.classList.remove('hidden');DOMElements.activeControls.innerHTML = '';if (sim.controls) {sim.controls.forEach(c => {let d = document.createElement('div');d.className = 'mb-3';let id = `${sim.id}_${c.id}`;if (c.type === 'range') {d.innerHTML = `<label for="${id}" class="text-sm">${c.label}</label><input type="range" id="${id}" name="${c.id}" min="${c.min}" max="${c.max}" value="${c.value}" step="${c.step || 1}" class="mt-1"><p class="text-xs text-right"><span id="${id}Value" class="telemetry-value">${c.value}</span> ${c.unit || ''}</p>`;DOMElements.activeControls.appendChild(d);document.getElementById(id).addEventListener('input', e => {document.getElementById(`${id}Value`).textContent = e.target.value;controlCb(sim.id, c.id, parseFloat(e.target.value), c.pyParameterName);});}if (c.type === 'vector4_euler') {d.innerHTML = `<label class="text-sm block mb-2">${c.label}</label><div class="flex flex-wrap gap-2">`;['Yaw', 'Pitch', 'Roll'].forEach((axis, i) => {const inputId = `${id}_${axis.toLowerCase()}`;d.innerHTML += `<div class="flex flex-col items-start"><label for="${inputId}" class="text-xs mb-1">${axis}</label><input type="number" id="${inputId}" step="1" class="w-24 p-1 text-black bg-white rounded" value="${c.default[i]}"></div>`;});d.innerHTML += `</div>`;DOMElements.activeControls.appendChild(d);['yaw', 'pitch', 'roll'].forEach(axis => {const input = document.getElementById(`${id}_${axis}`);input.addEventListener('input', () => {const yaw = parseFloat(document.getElementById(`${id}_yaw`).value) * Math.PI / 180;const pitch = parseFloat(document.getElementById(`${id}_pitch`).value) * Math.PI / 180;const roll = parseFloat(document.getElementById(`${id}_roll`).value) * Math.PI / 180;if (isNaN(yaw) || isNaN(pitch) || isNaN(roll)) return;const cy = Math.cos(yaw * 0.5), sy = Math.sin(yaw * 0.5);const cp = Math.cos(pitch * 0.5), sp = Math.sin(pitch * 0.5);const cr = Math.cos(roll * 0.5), sr = Math.sin(roll * 0.5);const qw = cy * cp * cr + sy * sp * sr;const qx = cy * cp * sr - sy * sp * cr;const qy = sy * cp * sr + cy * sp * cr;const qz = sy * cp * cr - cy * sp * sr;controlCb(sim.id, c.id, [qw, qx, qy, qz], c.pyParameterName);});});}});}if (sim.actions) {sim.actions.forEach(a => {let b = document.createElement('button');b.id = `${sim.id}_${a.id}`;b.className = 'w-full p-2 mt-2 btn-primary flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-400';b.innerHTML = `<i data-lucide="${a.icon || 'play'}" class="mr-2 h-4 w-4"></i> ${a.label}`;b.onclick = () => actionCb(sim.id, a.id, a.pyActionId, a.pyActionParams);DOMElements.activeControls.appendChild(b);});}try { lucide.createIcons(); } catch (e) { logError("Lucide control icon fail", e); }},
-                populateTelemetry: function(sim) { DOMElements.telemetryPlaceholder.classList.add('hidden'); DOMElements.activeTelemetry.classList.remove('hidden'); DOMElements.activeTelemetry.innerHTML = ''; if(sim.telemetry) sim.telemetry.forEach(item => { let p=document.createElement('p'); let idSuffix=item.toLowerCase().replace(/[^a-z0-9_]/g,'_'); p.innerHTML=`${item}: <span id="telemetry_${sim.id}_${idSuffix}" class="telemetry-value">N/A</span>`; DOMElements.activeTelemetry.appendChild(p);}); },
-                updateTelemetryDisplay: function(simId, payload) { for(const k in payload){ if(payload.hasOwnProperty(k)){ let idSuffix=k.toLowerCase().replace(/[^a-z0-9_]/g,'_'); let el=document.getElementById(`telemetry_${simId}_${idSuffix}`); if(el) el.textContent=payload[k];}}},
-                displayError: function(msg) { DOMElements.errorDisplayArea.classList.remove('hidden'); let p=document.createElement('p'); p.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`; DOMElements.errorMessages.appendChild(p); while(DOMElements.errorMessages.children.length > 5) DOMElements.errorMessages.removeChild(DOMElements.errorMessages.firstChild); },
-                updateEngineStatus: function(text, statusClass, indicator) { DOMElements.connectionStatus.textContent=text; DOMElements.connectionStatus.className=`text-${statusClass}-400`; DOMElements.connectionIndicator.className=`status-indicator ${indicator}`; },
-                showLoadingOverlay: function(msg) { DOMElements.loadingStatusText.textContent = msg || "Loading..."; DOMElements.loadingOverlay.classList.remove('hidden'); },
-                hideLoadingOverlay: function() { DOMElements.loadingOverlay.classList.add('hidden'); },
-                clearErrorDisplay: function() { DOMElements.errorDisplayArea.classList.add('hidden'); DOMElements.errorMessages.innerHTML = ''; }
-            };
-
-            const PyodideService = {
-                pyodide: null,
-                isReady: false,
-                isLoading: false,
-                currentScriptURL: null,
-
-                init: async function(pythonScriptURL) {
-                    if (this.isLoading) { log("Pyodide: Already loading."); return false; }
-                    // Only fully re-init if script URL changes or not ready
-                    if (this.isReady && this.currentScriptURL === pythonScriptURL) {
-                        log("Pyodide: Already initialized with this script.");
-                        return true;
-                    }
-                    
-                    this.isLoading = true;
-                    this.isReady = false; // Reset readiness for new script or first load
-                    this.currentScriptURL = pythonScriptURL;
-                    UI.showLoadingOverlay("Loading Pyodide runtime...");
-                    UI.updateEngineStatus('LOADING PYODIDE', 'yellow', 'status-standby');
-
-                    try {
-                        if (!this.pyodide) { // Load Pyodide core only once
-                            log("Pyodide: Loading Pyodide main package...");
-                            this.pyodide = await loadPyodide();
-                            UI.showLoadingOverlay("Pyodide runtime loaded. Loading Python packages...");
-                            log("Pyodide: Loading packages:", PYODIDE_PACKAGES);
-                            await this.pyodide.loadPackage(PYODIDE_PACKAGES);
-                        }
-                        
-                        UI.showLoadingOverlay(`Fetching Python script: ${pythonScriptURL.split('/').pop()}`);
-                        log(`Pyodide: Fetching Python script from ${pythonScriptURL}`);
-                        const response = await fetch(pythonScriptURL);
-                        if (!response.ok) throw new Error(`Fetch script failed (${response.status}): ${pythonScriptURL}`);
-                        const pythonScriptText = await response.text();
-                        
-                        UI.showLoadingOverlay("Executing Python simulation script...");
-                        // Running the script makes its global functions available
-                        await this.pyodide.runPythonAsync(pythonScriptText); 
-                        
-                        this.isReady = true;
-                        log(`Pyodide: Initialization complete for ${pythonScriptURL}. Python environment ready.`);
-                        UI.updateEngineStatus('READY', 'green', 'status-online');
-                        UI.clearErrorDisplay();
-                        return true;
-
-                    } catch (error) {
-                        logError("Pyodide Init Error:", error.message, error);
-                        UI.updateEngineStatus('ERROR', 'red', 'status-offline');
-                        this.isReady = false;
-                        return false;
-                    } finally {
-                        this.isLoading = false;
-                        UI.hideLoadingOverlay();
-                    }
-                },
-
-                callPython: function(funcName, args = []) {
-                    if (!this.isReady || !this.pyodide) { logError("Pyodide not ready to call:", funcName); return null; }
-                    try {
-                        const pyFunc = this.pyodide.globals.get(funcName);
-                        if (typeof pyFunc !== 'function') throw new Error(`Python func '${funcName}' not found.`);
-                        // Pyodide handles basic JS array/obj to Python list/dict conversion for args.
-                        // For complex args, might need pyodide.toPy().
-                        let result = pyFunc(...args); 
-                        if (result && typeof result.toJs === 'function') {
-                            return result.toJs({ dict_converter: Object.fromEntries });
-                        }
-                        return result; 
-                    } catch (error) { logError(`Error calling Python.${funcName}:`, error.message, error); return null; }
-                }
-            };
-            
-            const ThreeJSVisualizer = {
-                isInitialized: false,
-                visualizerModule: null,
-                currentModuleURL: null,
-
-                init: async function(canvas, moduleURL) {
-                    if (this.isInitialized && this.currentModuleURL === moduleURL) return;
-
-                    // Dispose current visualizer if it exists
-                    if (this.isInitialized) this.dispose();
-
-                    try {
-                        const module = await import(moduleURL);
-                        this.visualizerModule = module.Visualizer;
-                        await this.visualizerModule.init(canvas);
-                        this.currentModuleURL = moduleURL;
-                        this.isInitialized = true;
-                        console.log("Visualizer initialized from", moduleURL);
-                    } catch (e) {
-                        console.error("Visualizer initialization failed:", e);
-                        UI.displayError(`Visualizer Init Error: ${e.message}`);
-                    }
-                },
-
-                updateState: function(state) {
-                    if (this.isInitialized && this.visualizerModule && this.visualizerModule.updateState) {
-                        this.visualizerModule.updateState(state);
-                    }
-                },
-
-                dispose: function() {
-                    if (this.isInitialized && this.visualizerModule && this.visualizerModule.dispose) {
-                        this.visualizerModule.dispose();
-                    }
-                    this.isInitialized = false;
-                    this.visualizerModule = null;
-                    this.currentModuleURL = null;
-                    }
-                };
-
-
-            const App = {
-                isSimRunning: false,
-                
-                init: function() { log("App: Init"); UI.init(); UI.populateSimulatorList(SIMULATORS_CONFIG, this.handleSimulatorSelection.bind(this)); UI.updateEngineStatus('AWAITING SELECTION', 'yellow', 'status-standby'); },
-
-                handleSimulatorSelection: async function(simConfig) {
-                    log(`App: Selecting sim - ${simConfig.name}`);
-                    if (animationFrameId) cancelAnimationFrame(animationFrameId);
-                    this.isSimRunning = false;
-                    currentPythonSimState = null;
-                    currentSimConfig = simConfig;
-
-                    UI.updateSimulatorSelectionDisplay(simConfig.name);
-                    UI.showSimulationView();
-                    UI.populateControls(simConfig, this.handleActionTrigger.bind(this), this.handleControlUpdate.bind(this));
-                    UI.populateTelemetry(simConfig);
-                    
-
-                    if(simConfig.visualizerModuleURL){
-                        await ThreeJSVisualizer.init(DOMElements.simulationCanvas, simConfig.visualizerModuleURL);
-                    } else {
-                        ThreeJSVisualizer.dispose();
-                        logError("No visualizer module specified for this simulator.");
-                    }
-
-                    if (simConfig.type === 'pyodide') {
-                        if (!simConfig.pythonScriptURL) { logError("Pyodide sim config missing 'pythonScriptURL'"); return; }
-                        
-                        const pyodideReady = await PyodideService.init(simConfig.pythonScriptURL);
-                        if (!pyodideReady) { logError("Failed to init Pyodide for " + simConfig.name); return; }
-
-                        log(`App: Initializing Python sim module for ${simConfig.name}...`);
-                        const setupResult = PyodideService.callPython('setup_simulation', [simConfig.initialState || {}]);
-                        log(`App: Python setup_simulation result: ${setupResult}`);
-                        
-                        this.isSimRunning = true;
-                        lastSimStepTime = performance.now();
-                        this.runClientSideSimulationLoop();
-                    } else {
-                        logError("Unknown simulator type:", simConfig.type);
-                        UI.updateEngineStatus('TYPE_UNKNOWN', 'red', 'status-offline');
-                    }
-                },
-
-
-                runClientSideSimulationLoop: function() {
-                    if (!this.isSimRunning || !currentSimConfig || currentSimConfig.type !== 'pyodide') {
-                        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-                        animationFrameId = null;
-                        return;
-                    }
-                    const currentTime = performance.now();
-                    // const actualDt = (currentTime - lastSimStepTime) / 1000.0; // Can be used for monitoring
-                    lastSimStepTime = currentTime;
-                    // Standardized Python function call
-                    const pythonResult = PyodideService.callPython('update_simulation_step', [SIM_DT, {}]); // Pass empty controls dict for now
-
-                    if (pythonResult) {
-                        currentPythonSimState = pythonResult; 
-                        this.handlePythonSimState(pythonResult);
-                    }
-                    
-                    const stepTimeMs = performance.now() - currentTime;
-                    UI.updateTelemetryDisplay(currentSimConfig.id, {'Sim Step Time (ms)': stepTimeMs.toFixed(1)});
-
-                    animationFrameId = requestAnimationFrame(this.runClientSideSimulationLoop.bind(this));
-                },
-
-                handlePythonSimState: function(state) {
-                    if (!state || !currentSimConfig) return;
-                    ThreeJSVisualizer.updateState(state); 
-                    // The telemetry payload is the state itself. UI.updateTelemetryDisplay will pick keys.
-                    // Ensure Python state dict keys are mappable to telemetry item names in config.
-                    UI.updateTelemetryDisplay(currentSimConfig.id, state);
-                },
-
-                handleControlUpdate: function(simId, controlId, value, pyParameterName) {
-                    log(`App: Control update - Sim: ${simId}, Control: ${controlId}, Value: ${value}, PyParam: ${pyParameterName}`);
-                    if (currentSimConfig && currentSimConfig.id === simId && currentSimConfig.type === 'pyodide') {
-                        if (pyParameterName) {
-                            // Standardized Python function call
-                            PyodideService.callPython('set_simulation_parameter', [pyParameterName, value]);
-                        } else {
-                            logError(`Control '${controlId}' for sim '${simId}' is missing 'pyParameterName' in config.`);
-                        }
-                    }
-                },
-
-                handleActionTrigger: function(simId, actionId, pyActionId, pyActionParams) {
-                    log(`App: Action trigger - Sim: ${simId}, Action: ${actionId}, PyAction: ${pyActionId}`);
-                    
-                    if (actionId === 'stop_sim') {
-                        if (animationFrameId) cancelAnimationFrame(animationFrameId);
-                        animationFrameId = null;
-                        this.isSimRunning = false;
-                        UI.updateEngineStatus('STOPPED', 'red', 'status-offline');
-                        log("Simulation stopped.");
-                        return;
-                    }
-
-                    if (currentSimConfig && currentSimConfig.id === simId && currentSimConfig.type === 'pyodide') {
-                        if (pyActionId) {
-                            // Standardized Python function call
-                            PyodideService.callPython('handle_action_command', [pyActionId, pyActionParams || {}]);
-                            // If it's a reset, re-initialize the Python state via setup
-                            if (pyActionId.toLowerCase().includes('reset')) {
-                                UI.updateEngineStatus('READY', 'green', 'status-online');
-                                PyodideService.callPython('setup_simulation', [currentSimConfig.initialState || {}]);
-                                if (!this.isSimRunning) { // If sim was paused/stopped, restart loop
-                                   this.isSimRunning = true;
-                                   lastSimStepTime = performance.now();
-                                   this.runClientSideSimulationLoop();
-                                }
-                            }
-                        } else {
-                            logError(`Action '${actionId}' for sim '${simId}' is missing 'pyActionId' in config.`);
-                        }
-                    }
-                }
-            };
-
-            document.addEventListener('DOMContentLoaded', () => App.init());
-        })();
-    </script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>

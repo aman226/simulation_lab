@@ -1,12 +1,13 @@
 import numpy as np
 from scipy.integrate import RK45
+import gc
 
 MU = 3.986e14  # Earth's gravitational parameter (m^3/s^2)
-R_EARTH = 6371e3
+R_EARTH = 6371e3  # Earth radius (m)
 RHO_0 = 1.225e-9  # Atmospheric density at 400 km (kg/m^3)
 H_SCALE = 100e3  # Scale height for atmosphere (m)
 SOLAR_PRESSURE = 4.5e-6  # N/m² (approximation)
-C_LIGHT = 3e8
+C_LIGHT = 3e8  # Speed of light (m/s)
 
 controller_gains = {
     "kp": 0.08,
@@ -14,16 +15,16 @@ controller_gains = {
     "ki": 0.0
 }
 
-I = np.diag([10.0, 8.0, 5.0])
+I = np.diag([10.0, 8.0, 5.0])  # Moment of inertia (kg·m²)
 I_inv = np.linalg.inv(I)
-max_torque = 0.1
+max_torque = 0.1  # Maximum control torque (N·m)
 
 satellite_properties = {
     "mass": 500.0,           # kg
     "area": 2.0,             # m² (cross-section)
-    "c_d": 2.2,              # drag coefficient
-    "c_r": 1.5,              # reflectivity
-    "com_offset": np.array([0.0, 0.0, 0.0])  # Assume centered for now
+    "c_d": 2.2,              # Drag coefficient
+    "c_r": 1.5,              # Reflectivity
+    "com_offset": np.array([0.0, 0.0, 0.0])  # Assume centered
 }
 
 simulation_state = {
@@ -31,17 +32,18 @@ simulation_state = {
     "solution": None,
     "last_state": None,
     "current_time": 0.0,
-    "q_desired": np.array([1.0, 0.0, 0.0, 0.0]),
+    "q_desired": np.array([1.0, 0.0, 0.0, 0.0]),  # [w, x, y, z]
     "integral_error": np.zeros(3)
 }
 
 def setup_simulation(initial_state=None):
     global simulation_state
 
-    r0 = np.array([7000e3, 0, 0])
-    v0 = np.array([0, 7.5e3, 0])
-    q0 = np.array([1, 0, 0, 0])
-    omega0 = np.array([0.0, 0.0, 0.01])
+    # NED initial conditions: x=north, y=east, z=down
+    r0 = np.array([0, 0, -(R_EARTH + 400e3)])  # 400 km altitude (z=down)
+    v0 = np.array([7500.0, 0, 0])  # Velocity in north direction
+    q0 = np.array([1.0, 0.0, 0.0, 0.0])  # [w, x, y, z]
+    omega0 = np.array([0.0, 0.0, 0.01])  # Angular velocity
     state0 = np.concatenate([r0, v0, q0, omega0])
 
     t0 = 0.0
@@ -52,39 +54,40 @@ def setup_simulation(initial_state=None):
     simulation_state["current_time"] = t0
     simulation_state["integral_error"] = np.zeros(3)
 
-    return "Satellite Initialized"
+    gc.collect()  # Clean up memory
+    return {"status": "Satellite Initialized"}
 
 def state_derivative(t, state):
-    r = state[0:3]
+    r = state[0:3]  # NED: x=north, y=east, z=down
     v = state[3:6]
-    q = state[6:10] / np.linalg.norm(state[6:10])
+    q = state[6:10] / np.linalg.norm(state[6:10])  # Normalize quaternion
     omega = state[10:13]
 
     r_norm = np.linalg.norm(r)
 
+    # Gravitational acceleration
     a_gravity = -MU * r / r_norm**3
     a_drag = atmospheric_drag(r, v)
     a_solar = solar_pressure(r)
-
     a_total = a_gravity + a_drag + a_solar
 
+    # Torques
     gg_torque = gravity_gradient_torque(r)
-    drag_torque = np.zeros(3)  # Assumed negligible or symmetric
+    drag_torque = np.zeros(3)  # Assumed negligible
     solar_torque = np.zeros(3)  # Assumed aligned
 
+    # PID control for attitude
     q_des = simulation_state["q_desired"]
     q_error = quat_multiply(q_des, quat_conjugate(q))
     att_err = q_error[1:4] if q_error[0] >= 0 else -q_error[1:4]
-
-    simulation_state["integral_error"] += att_err * 1.0
+    simulation_state["integral_error"] += att_err * 0.2  # Use dt=0.2
     i_term = controller_gains["ki"] * simulation_state["integral_error"]
-
     control_torque = (-controller_gains["kp"] * att_err
-                      -controller_gains["kd"] * omega
-                      -i_term)
-
+                      - controller_gains["kd"] * omega
+                      - i_term)
     control_torque = np.clip(control_torque, -max_torque, max_torque)
 
+    # Angular acceleration
     omega_dot = I_inv @ (control_torque + gg_torque + drag_torque + solar_torque - np.cross(omega, I @ omega))
     omega_quat = np.array([0.0, *omega])
     q_dot = 0.5 * quat_multiply(q, omega_quat)
@@ -99,7 +102,7 @@ def atmospheric_drag(r, v):
     return drag_acc
 
 def solar_pressure(r):
-    sun_dir = np.array([1.0, 0.0, 0.0])
+    sun_dir = np.array([1.0, 0.0, 0.0])  # Sun in north direction (NED)
     if np.dot(r, sun_dir) < 0:
         return np.zeros(3)
     force_mag = SOLAR_PRESSURE * satellite_properties["area"] * satellite_properties["c_r"] / satellite_properties["mass"]
@@ -114,8 +117,10 @@ def update_simulation_step(dt, controls):
     global simulation_state
 
     solver = simulation_state["solver"]
-    t_target = solver.t + dt
+    if solver is None:
+        return setup_simulation({})
 
+    t_target = solver.t + dt
     while solver.status == 'running' and solver.t < t_target:
         solver.step()
 
@@ -123,12 +128,11 @@ def update_simulation_step(dt, controls):
         return {"error": "Solver stopped or failed."}
 
     y_next = solver.y
-    y_next[6:10] /= np.linalg.norm(y_next[6:10])
-
+    y_next[6:10] /= np.linalg.norm(y_next[6:10])  # Normalize quaternion
     simulation_state["last_state"] = y_next
     simulation_state["current_time"] = solver.t
 
-    r = y_next[0:3]
+    r = y_next[0:3]  # NED: x=north, y=east, z=down
     v = y_next[3:6]
     q = y_next[6:10]
 
@@ -151,8 +155,15 @@ def update_simulation_step(dt, controls):
     }
 
 def handle_action_command(action_id, params):
+    global simulation_state
     if action_id == 'reset_to_initial_config':
+        simulation_state["solver"] = None
+        simulation_state["current_time"] = 0.0
+        simulation_state["integral_error"] = np.zeros(3)
         setup_simulation({})
+        gc.collect()
+        return {"status": "Simulation reset"}
+    return {"status": "Unknown action"}
 
 def set_simulation_parameter(param, value):
     global controller_gains, simulation_state
@@ -160,9 +171,12 @@ def set_simulation_parameter(param, value):
         if param in controller_gains:
             controller_gains[param] = float(value)
         elif param == "q_desired":
-            simulation_state["q_desired"] = np.array(value, dtype=float)
+            simulation_state["q_desired"] = np.array(value, dtype=float) / np.linalg.norm(value)
+        print(f"[Pyodide] Setting parameter {param} to {value}")
+        return True
     except Exception as e:
-        print(f"Parameter Set Error ({param}): {e}")
+        print(f"[Pyodide] Parameter Set Error ({param}): {e}")
+        return False
 
 def quat_multiply(q1, q2):
     w1, x1, y1, z1 = q1
@@ -180,8 +194,8 @@ def quat_conjugate(q):
 def cartesian_to_spherical(r_vec):
     x, y, z = r_vec
     r = np.linalg.norm(r_vec)
-    theta = np.arccos(z / r)
-    phi = np.arctan2(y, x)
+    theta = np.arccos(z / r)  # NED: z=down
+    phi = np.arctan2(y, x)    # y=east, x=north
     return r, theta, phi
 
 def get_radial_tangential_velocity(r_vec, v_vec):
