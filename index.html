@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrbitingIdeas SimLab</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/loaders/GLTFLoader.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="./style.css">
+<style>
+    body {
+        font-family: 'Space Mono', monospace;
+        background-color: #0A0F1A;
+        color: #E0E0E0;
+    }
+    .glassmorphism {
+        background: rgba(12, 20, 39, 0.6);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 190, 255, 0.2);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: #0A0F1A;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #007BFF;
+        border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #0056b3;
+    }
+    .btn-primary {
+        background-color: #007BFF;
+        color: white;
+        transition: all 0.3s ease;
+        border: 1px solid #0056b3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        border-radius: 6px;
+        font-weight: bold;
+    }
+    .btn-primary:hover {
+        background-color: #0056b3;
+        box-shadow: 0 0 10px #007BFF;
+    }
+    .btn-secondary {
+        background-color: #1A2C47;
+        color: #00BEFF;
+    }
+    .btn-secondary:hover {
+        background-color: #2a4163;
+    }
+    .btn-active {
+        background-color: #00BEFF !important;
+        color: #0A0F1A !important;
+        box-shadow: 0 0 15px #00BEFF;
+    }
+    input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 8px;
+        background: #1A2C47;
+        outline: none;
+        opacity: 0.9;
+        transition: opacity .2s;
+        border-radius: 4px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #00BEFF;
+        cursor: pointer;
+        border-radius: 50%;
+        border: 2px solid #0A0F1A;
+    }
+    .sim-item {
+        transition: all 0.2s ease-in-out;
+        border-left: 4px solid transparent;
+    }
+    .sim-item:hover {
+        background-color: #1A2C47;
+        border-left-color: #00BEFF;
+    }
+    .sim-item.active {
+        background-color: #00BEFF;
+        color: #0A0F1A;
+        font-weight: bold;
+        border-left-color: #80DFFF;
+    }
+    .telemetry-value {
+        color: #00BEFF;
+        font-weight: bold;
+    }
+    .vector-input input, .scalar-input {
+        background-color: #1A2C47;
+        border: 1px solid #007BFF;
+        border-radius: 4px;
+        text-align: center;
+        width: 100%;
+        padding: 4px;
+    }
+    .input-error {
+        border-color: #FF3131 !important;
+        box-shadow: 0 0 8px #FF3131;
+    }
+    main {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        height: calc(100vh - 64px); /* Explicitly set main height */
+    }
+    #simulation-container {
+        flex-grow: 1;
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+    #simulation-canvas {
+        width: 100% !important;
+        height: 100% !important;
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    #telemetry-column {
+        flex-grow: 1;
+        overflow-y: auto;
+        width: 100%;
+    }
+    #sidebar {
+        transition: transform 0.3s ease;
+        transform: translateX(0);
+    }
+    #sidebar.collapsed {
+        transform: translateX(-100%);
+    }
+    #sidebar.collapsed + #simulation-container {
+        width: 100% !important; /* Expand simulation container */
+    }
+    #simulation-list-container {
+        max-height: 40vh;
+        transition: max-height 0.3s ease;
+    }
+    #simulation-list-container.constrained {
+        max-height: calc(3 * 3.5rem);
+    }
+    [data-tooltip]:hover:after {
+        content: attr(data-tooltip);
+        position: absolute;
+        background: #1A2C47;
+        color: #E0E0E0;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 10;
+    }
+    @media (max-width: 1023px) {
+        #sidebar {
+            position: absolute;
+            z-index: 10;
+            height: calc(100vh - 64px);
+            width: 100%;
+        }
+        #sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+        #simulation-container {
+            width: 100%;
+            height: calc(100vh - 64px); /* Full height minus header */
+            min-height: 50vh;
+        }
+        #telemetry-column {
+            width: 100%;
+            height: calc(100vh - 64px); /* Full height minus header */
+            min-height: 0;
+        }
+        #sidebar.collapsed ~ #simulation-container,
+        #sidebar.collapsed ~ #telemetry-column {
+            height: calc(100vh - 64px) !important; /* Maintain height */
+        }
+        #telemetry-panel {
+            grid-template-columns: 1fr;
+        }
+        #parameter-modal {
+            padding: 1rem;
+        }
+        #parameter-modal > div {
+            max-width: 100%;
+            min-width: 0;
+        }
+        #simulation-list-container.constrained {
+            max-height: calc(3 * 3rem);
+        }
+    }
+    @media (min-width: 1024px) {
+        #sidebar {
+            position: relative;
+        }
+        main {
+            flex-direction: row;
+            height: 100vh; /* Full viewport height */
+        }
+        #simulation-container {
+            width: calc(100% - 4/12 * 100%); /* Adjusted for wider sidebar */
+            height: 100%;
+            min-height: 0;
+        }
+        #telemetry-column {
+            width: calc(3/12 * 100%);
+            height: 100%;
+        }
+    }
+    #telemetry-chart {
+        max-height: 200px;
+        width: 100% !important;
+        height: 200px !important;
+    }
+</style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+    <header class="bg-black/30 glassmorphism text-white p-2 sm:p-3 shadow-lg border-b border-blue-500/30 flex items-center justify-between z-20 flex-shrink-0">
+        <div class="flex items-center space-x-2 sm:space-x-4">
+            <button id="toggle-sidebar-btn" class="btn-primary p-2" title="Toggle Sidebar">
+                <i data-lucide="chevron-left" class="h-4 w-4"></i>
+            </button>
+            <button id="back-btn" class="btn-primary hidden"><i data-lucide="arrow-left" class="h-4 w-4"></i></button>
+            <a href="https://www.orbitingideas.com">
+                <img src="./assets/logo.png" alt="Logo" class="text-blue-400 h-[31px] w-[100px]">
+            </a>
+            <h1 class="text-base sm:text-lg md:text-2xl tracking-wider font-['Montserrat'] font-bold">SimLab</h1>
+        </div>
+        <div class="flex items-center text-xs sm:text-sm">
+            <span class="hidden sm:inline mr-2">SIM ENGINE:</span>
+            <span id="engine-status-indicator" class="w-3 h-3 rounded-full bg-yellow-400 inline-block mr-2"></span>
+            <span id="engine-status-text" class="text-yellow-400">STANDBY</span>
+            <button id="audio-btn" class="btn-primary ml-4" title="Toggle Audio">
+                <i data-lucide="volume-2" class="h-4 w-4"></i>
+            </button>
+        </div>
+    </header>
+    <audio id="background-audio" autoplay loop muted>
+        <source src="./space_music.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+    
+<main class="flex-grow flex flex-col lg:flex-row overflow-hidden">
+    <aside id="sidebar" class="w-full lg:w-4/12 glassmorphism p-4 flex flex-col overflow-y-auto custom-scrollbar border-b lg:border-b-0 lg:border-r border-blue-500/30 transition-transform duration-300">
+        <h2 class="text-base sm:text-lg font-semibold text-blue-300 border-b border-blue-400/50 pb-2 mb-3 flex items-center">
+            <i data-lucide="rocket" class="h-4 w-4 mr-2"></i>Simulations
+        </h2>
+        <div id="simulation-list-container" class="space-y-2 mb-6 flex-shrink-0 overflow-y-auto custom-scrollbar pr-2"></div>
+        <div id="active-sim-controls" class="hidden flex-grow flex flex-col">
+            <h2 class="text-base sm:text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2 flex items-center">
+                <i data-lucide="gamepad-2" class="h-4 w-4 mr-2"></i>Controls
+            </h2>
+            <div class="flex space-x-2 mb-4">
+                <button id="start-btn" class="btn-primary flex-1"><i data-lucide="play" class="h-4 w-4 mr-2"></i>Start</button>
+                <button id="stop-btn" class="btn-primary flex-1"><i data-lucide="pause" class="h-4 w-4 mr-2"></i>Stop</button>
+                <button id="reset-btn" class="btn-primary flex-1"><i data-lucide="rotate-cw" class="h-4 w-4 mr-2"></i>Reset</button>
+            </div>
+            <button id="open-params-btn" class="btn-primary btn-secondary w-full mb-6">
+                <i data-lucide="sliders-horizontal" class="h-4 w-4 mr-2"></i>All Parameters
+            </button>
+            <div id="quick-access-parameters-panel" class="space-y-4 mb-6 overflow-y-auto custom-scrollbar"></div>
+            <div id="user-controls-panel" class="mb-6 hidden">
+                <h2 class="text-base sm:text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2 flex items-center">
+                    <i data-lucide="mouse-pointer-click" class="h-4 w-4 mr-2"></i>Vehicle Control
+                </h2>
+                <div id="user-controls-content" class="text-center bg-black/30 p-3 rounded-lg mt-2 border border-blue-500/20"></div>
+            </div>
+            <div class="mt-auto text-xs text-gray-500 text-center pt-4">
+                <p>Orbit: LMB+drag, Zoom: Scroll, Pan: RMB+drag</p>
+                <p>© 2025 AeroSim Project</p>
+            </div>
+        </div>
+        <div id="standby-panel" class="flex-grow flex items-center justify-center text-gray-600">
+            <div class="text-center">
+                <p>Select a simulation</p>
+                <p>to begin.</p>
+            </div>
+        </div>
+    </aside>
+    <section id="simulation-container" class="flex-grow w-full lg:w-5/12 bg-black relative">
+        <canvas id="simulation-canvas" class="w-full h-full"></canvas>
+        <div id="viewport-placeholder" class="absolute inset-0 flex items-center justify-center text-gray-600">
+            <div class="text-center">
+                <i data-lucide="scan-eye" class="h-16 w-16 sm:h-24 sm:w-24 mx-auto mb-4"></i>
+                <p class="text-lg sm:text-xl">VIEWER OFFLINE</p>
+                <p>Select a simulator from the list to begin.</p>
+            </div>
+        </div>
+    </section>
+    <aside id="telemetry-column" class="w-full lg:w-3/12 glassmorphism p-4 flex flex-col overflow-y-auto custom-scrollbar border-t lg:border-t-0 lg:border-l border-blue-500/30">
+        <div id="telemetry-placeholder" class="flex-grow flex items-center justify-center text-gray-600">
+            <div class="text-center">
+                <i data-lucide="activity" class="h-16 w-16 sm:h-24 sm:w-24 mx-auto mb-4"></i>
+                <p>Awaiting telemetry stream...</p>
+            </div>
+        </div>
+        <div id="active-sim-telemetry" class="hidden flex-1">
+            <h2 class="text-base sm:text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2 flex items-center">
+                <i data-lucide="activity" class="h-4 w-4 mr-2"></i>Live Telemetry
+            </h2>
+            <div id="telemetry-panel" class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6 font-mono text-sm"></div>
+            <h2 class="text-base sm:text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2 flex items-center">
+                <i data-lucide="line-chart" class="h-4 w-4 mr-2"></i>Data Plot
+            </h2>
+            <div class="mb-3">
+                <label for="telemetry-select" class="block text-sm font-medium text-gray-300 mb-1">Select Metric to Plot</label>
+                <select id="telemetry-select" class="bg-[#1A2C47] border border-blue-500/50 rounded-md p-2 text-sm text-blue-300 w-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            <div class="bg-black/30 p-2 rounded-md mt-2 border border-blue-500/20 flex-grow" style="height:220px; min-height:200px;">
+                <canvas id="telemetry-chart" style="width:100% !important; height:200px !important;"></canvas>
+            </div>
+        </div>
+    </aside>
+</main>
+
+    <div id="parameter-modal" class="fixed inset-0 z-50 hidden bg-black/70 flex items-center justify-center p-2 sm:p-4">
+        <div class="glassmorphism p-4 sm:p-6 rounded-xl shadow-2xl w-full max-w-md border-blue-400">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg sm:text-xl font-bold text-blue-200 flex items-center">
+                    <i data-lucide="settings-2" class="h-5 w-5 mr-3"></i>Parameters
+                </h2>
+                <button id="close-params-btn" class="text-gray-400 hover:text-red-400 text-xl sm:text-2xl">×</button>
+            </div>
+            <div id="parameter-form" class="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2"></div>
+            <div id="validation-error-msg" class="text-red-400 text-sm mt-4 hidden">Please fix the invalid fields before applying.</div>
+            <div class="flex gap-4 mt-6">
+                <button id="apply-live-btn" class="btn-primary btn-secondary flex-1" type="button">
+                    <i data-lucide="zap" class="h-4 w-4 mr-2"></i>Apply
+                </button>
+                <button id="save-and-reset-btn" class="btn-primary flex-1" type="button">
+                    <i data-lucide="save" class="h-4 w-4 mr-2"></i>Apply & Reset
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Global state
+        let scene, camera, renderer, world, clock, starfield, chart;
+        let activeSimulation = null;
+        let simulationRunning = false;
+        let animationFrameId;
+        let objectsToUpdate = [];
+        let currentParameters = {};
+        let modalParameters = {};
+        let eventListeners = [];
+        let isMouseDown = false, isRightMouseDown = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let orbitControls = null;
+        let cameraControlType = 'none';
+        const simContainer = document.getElementById('simulation-container');
+        const canvas = document.getElementById('simulation-canvas');
+        const parameterModal = document.getElementById('parameter-modal');
+        const simulationConfig = {
+            maxObjects: 1000,
+            defaultCamera: { fov: 75, near: 0.1, far: 100000, position: new THREE.Vector3(0, 50, 200) },
+            chartColors: ['#00BEFF', '#FF6B6B', '#FFD166', '#4DDB6A'],
+            defaultUpdateInterval: 1 / 60, // Default physics timestep (seconds)
+            defaultTimeScale: 1.0,
+        };
+
+        function enableCameraControl(type) {
+            removeCustomCameraListeners();
+            if (orbitControls) {
+                orbitControls.dispose();
+                orbitControls = null;
+            }
+
+            cameraControlType = type;
+            if (type === 'custom') {
+                addCustomCameraListeners();
+            } else if (type === 'orbit') {
+                orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+                // Optionally set limits, speeds, etc.
+                orbitControls.target.copy(objectsToUpdate[0]?.cameraTarget || new THREE.Vector3(0,0,0));
+                orbitControls.update();
+            }
+        }
+        
+        // Input Manager for handling keyboard and button inputs
+        class InputManager {
+            constructor() {
+                this.listeners = [];
+                this.keyStates = {};
+                this.buttonMap = {
+                    'up-thrust': 'ArrowUp',
+                    'down-thrust': 'ArrowDown',
+                    'left-thrust': 'ArrowLeft',
+                    'right-thrust': 'ArrowRight'
+                };
+                this.setupGlobalListeners();
+            }
+
+            setupGlobalListeners() {
+                this.listeners.push(
+                    { element: window, event: 'keydown', listener: (e) => this.keyStates[e.key] = true },
+                    { element: window, event: 'keyup', listener: (e) => this.keyStates[e.key] = false }
+                );
+                this.listeners.forEach(({ element, event, listener }) => element.addEventListener(event, listener));
+            }
+
+            setupButtonListeners(simulationId) {
+                if (simulationId !== 'lunarLander') return;
+                document.querySelectorAll('#user-controls-content button').forEach(button => {
+                    if (this.buttonMap[button.id]) {
+                        this.listeners.push(
+                            { element: button, event: 'mousedown', listener: () => this.keyStates[this.buttonMap[button.id]] = true },
+                            { element: button, event: 'mouseup', listener: () => this.keyStates[this.buttonMap[button.id]] = false },
+                            { element: button, event: 'mouseleave', listener: () => this.keyStates[this.buttonMap[button.id]] = false }
+                        );
+                    }
+                });
+                this.listeners.slice(-3 * document.querySelectorAll('#user-controls-content button').length).forEach(({ element, event, listener }) => element.addEventListener(event, listener));
+            }
+
+            update(simulationId) {
+                if (simulationId !== 'lunarLander' || !activeSimulation?.userControls?.keys) return;
+                Object.entries(this.keyStates).forEach(([key, value]) => {
+                    activeSimulation.userControls.keys[key] = value;
+                    const btnId = Object.keys(this.buttonMap).find(id => this.buttonMap[id] === key);
+                    if (btnId) document.getElementById(btnId)?.classList.toggle('btn-active', value);
+                });
+            }
+
+            cleanup() {
+                this.listeners = this.listeners.filter(l => l.element === window); // Keep global listeners
+                this.keyStates = {};
+            }
+        }
+
+        const inputManager = new InputManager();
+
+        // Utility functions
+        const utils = {
+            createMesh: (geometry, materialProps) => {
+                const material = new THREE.MeshStandardMaterial(materialProps);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.geometry.computeBoundingSphere();
+                return mesh;
+            },
+            createParticleSystem: (count, size, color) => {
+                const particles = new THREE.BufferGeometry();
+                const positions = new Float32Array(count * 3);
+                const colors = new Float32Array(count * 3);
+                for (let i = 0; i < count; i++) {
+                    positions[i * 3] = (Math.random() - 0.5) * size;
+                    positions[i * 3 + 1] = (Math.random() - 0.5) * size;
+                    positions[i * 3 + 2] = (Math.random() - 0.5) * size;
+                    colors[i * 3] = color.r;
+                    colors[i * 3 + 1] = color.g;
+                    colors[i * 3 + 2] = color.b;
+                }
+                particles.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                particles.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                const material = new THREE.PointsMaterial({
+                    size: size / 10,
+                    vertexColors: true,
+                    transparent: true,
+                    blending: THREE.AdditiveBlending
+                });
+                return new THREE.Points(particles, material);
+            },
+            disposeObject: (obj) => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(mat => {
+                            if (mat.map) mat.map.dispose();
+                            mat.dispose();
+                        });
+                    } else {
+                        if (obj.material.map) obj.material.map.dispose();
+                        obj.material.dispose();
+                    }
+                }
+                if (obj.isInstancedMesh) obj.dispose();
+                if (obj.children) obj.children.forEach(child => utils.disposeObject(child));
+            },
+            applyForce: (body, force, position) => {
+                body.applyForce(new CANNON.Vec3().copy(force), new CANNON.Vec3().copy(position));
+            },
+            validateNumber: (value, min, max) => {
+                const num = parseFloat(value);
+                if (isNaN(num)) return false;
+                if (min !== undefined && num < min) return min;
+                if (max !== undefined && num > max) return max;
+                return num;
+            },
+            debounce: (func, wait) => {
+                let timeout;
+                return (...args) => {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func(...args), wait);
+                };
+            }
+        };
+
+        // Simulation class
+        class Simulation {
+            constructor(id, config) {
+                this.id = id;
+                this.name = config.name;
+                this.parameters = config.parameters;
+                this.telemetry = config.telemetry;
+                this.userControls = config.userControls;
+                this.cameraControl = config.cameraControl;
+                this.cameraSettings = config.cameraSettings || simulationConfig.defaultCamera;
+                this.updateInterval = config.updateInterval || simulationConfig.defaultUpdateInterval; // New
+                this.init = config.init.bind(this);
+                this.update = config.update?.bind(this) || (() => {});
+                this.updateParameters = config.updateParameters?.bind(this) || (() => {});
+                this.getTelemetry = config.getTelemetry.bind(this);
+                this.state = {};
+            }
+        }
+
+       const simulations = {
+            leoSatelliteSim: new Simulation('leoSatelliteSim', {
+            name: 'LEO Satellite Simulator',
+            cameraControl: 'orbit',
+            parameters: [
+                { id: 'kp', label: 'Proportional Gain (Kp)', type: 'scalar', control: 'slider', min: 0, max: 10, step: 0.01, defaultValue: 0.08 },
+                { id: 'ki', label: 'Integral Gain (Ki)', type: 'scalar', control: 'slider', min: 0, max: 5, step: 0.01, defaultValue: 0.0 },
+                { id: 'kd', label: 'Derivative Gain (Kd)', type: 'scalar', control: 'slider', min: 0, max: 10, step: 0.01, defaultValue: 0.44 },
+                { id: 'q_desired', label: 'Desired Quaternion', type: 'vector4d', defaultValue: { w: 1.0, x: 0.0, y: 0.0, z: 0.0 } },
+                { id: 'mu', label: 'Gravitational Parameter', units: 'm³/s²', type: 'scalar', defaultValue: 3.986e14 },
+                { id: 'r_earth', label: 'Earth Radius', units: 'm', type: 'scalar', defaultValue: 6371e3 },
+                { id: 'rho_0', label: 'Reference Density', units: 'kg/m³', type: 'scalar', control: 'slider', min: 1e-9, max: 2e-9, step: 0.01e-9, defaultValue: 1.225e-9 },
+                { id: 'h_scale', label: 'Scale Height', units: 'm', type: 'scalar', defaultValue: 100e3 },
+                { id: 'solar_pressure', label: 'Solar Pressure', units: 'N/m²', type: 'scalar', control: 'slider', min: 3e-6, max: 6e-6, step: 0.01e-6, defaultValue: 4.5e-6 },
+                { id: 'c_light', label: 'Speed of Light', units: 'm/s', type: 'scalar', defaultValue: 3e8 },
+                { id: 'max_torque', label: 'Max Control Torque', units: 'N·m', type: 'scalar', control: 'slider', min: 0.05, max: 0.5, step: 0.01, defaultValue: 0.1 },
+                { id: 'timeScale', label: 'Simulation Speed', type: 'scalar', control: 'slider', min: 0.1, max: 100, step: 0.1, defaultValue: 1.0 }
+            ],
+            telemetry: [
+                { id: 'Time', type: 'scalar' },
+                { id: 'Simulation Speed', type: 'scalar' }, // New telemetry
+                { id: 'Radius', type: 'scalar' },
+                { id: 'Latitude', type: 'scalar' },
+                { id: 'Longitude', type: 'scalar' },
+                { id: 'Radial Velocity', type: 'scalar' },
+                { id: 'Tangential Velocity', type: 'scalar' },
+                { id: 'Azimuth', type: 'scalar' },
+                { id: 'Quaternion', type: 'vector4d', ids: ['w', 'x', 'y', 'z'] },
+                { id: 'Position', type: 'vector3d', ids: ['x', 'y', 'z'] }
+            ],
+            userControls: null,
+            cameraSettings: { position: new THREE.Vector3(0, 0, (6371e3 + 400e3) * 1.5), near: 1e5, far: 1e9 },
+            init: async function(params) {
+                world.gravity.set(0, 0, 0);
+                this.state = {
+                    I: new CANNON.Mat3([10.0, 0, 0, 0, 8.0, 0, 0, 0, 5.0]),
+                    integralError: new CANNON.Vec3(0, 0, 0),
+                    currentTime: 0.0,
+                    timeScale: params.timeScale || simulationConfig.defaultTimeScale, // Initialize timeScale
+                    loader: new THREE.GLTFLoader(),
+                    earthModel: null,
+                    satModel: null
+                };
+
+                // Load space skybox
+                scene.background = new THREE.CubeTextureLoader().load([
+                    './skybox/space/bkg1_right1.png',
+                    './skybox/space/bkg1_left2.png',
+                    './skybox/space/bkg1_top3.png',
+                    './skybox/space/bkg1_bottom4.png',
+                    './skybox/space/bkg1_front5.png',
+                    './skybox/space/bkg1_back6.png'
+                ]);
+
+                // Configure camera
+                camera = new THREE.PerspectiveCamera(
+                    70,
+                    canvas.clientWidth / canvas.clientHeight,
+                    1e5,
+                    1e9
+                );
+                camera.position.copy(this.cameraSettings.position);
+                camera.lookAt(0, 0, 0);
+                camera.updateProjectionMatrix();
+
+                // Load Earth model
+                try {
+                    const earthGltf = await new Promise((resolve, reject) => {
+                        this.state.loader.load(
+                            './models/Earth_1_12756.glb',
+                            resolve,
+                            undefined,
+                            (error) => reject(new Error(`Failed to load Earth model: ${error.message}`))
+                        );
+                    });
+                    this.state.earthModel = earthGltf.scene;
+                    this.state.earthModel.scale.setScalar(12742);
+                    this.state.earthModel.name = 'earth';
+                    scene.add(this.state.earthModel);
+                } catch (error) {
+                    console.error(error.message);
+                }
+
+                // Load satellite model
+                const satBody = new CANNON.Body({
+                    mass: 500,
+                    shape: new CANNON.Sphere(1)
+                });
+                satBody.inertia.set(10, 8, 5);
+                satBody.position.set(0, 0, params.r_earth + 400e3);
+                satBody.velocity.set(7500, 0, 0);
+                satBody.quaternion.set(1.0, 0.0, 0.0, 0.0);
+                satBody.angularVelocity.set(0, 0, 0.01);
+                world.addBody(satBody);
+
+                try {
+                    const satGltf = await new Promise((resolve, reject) => {
+                        this.state.loader.load(
+                            './models/AcrimSAT.glb',
+                            resolve,
+                            undefined,
+                            (error) => reject(new Error(`Failed to load satellite model: ${error.message}`))
+                        );
+                    });
+                    this.state.satModel = satGltf.scene;
+                    this.state.satModel.scale.setScalar(120000);
+                    this.state.satModel.name = 'satellite';
+                    scene.add(this.state.satModel);
+                } catch (error) {
+                    console.error(error.message);
+                    this.state.satModel = utils.createMesh(
+                        new THREE.BoxGeometry(2, 2, 2),
+                        { color: 0xffffff, metalness: 0.9, roughness: 0.2 }
+                    );
+                    this.state.satModel.scale.setScalar(30000);
+                    scene.add(this.state.satModel);
+                }
+
+                // Add axes helper
+                const axesHelper = new THREE.AxesHelper(2e7);
+                scene.add(axesHelper);
+
+                this.updateParameters(params);
+                return [{ mesh: this.state.satModel, body: satBody, cameraTarget: new THREE.Vector3(0, 0, 0) }];
+            },
+            updateParameters: function(params) {
+                this.state.kp = params.kp;
+                this.state.ki = params.ki;
+                this.state.kd = params.kd;
+                this.state.mu = params.mu;
+                this.state.r_earth = params.r_earth;
+                this.state.rho_0 = params.rho_0;
+                this.state.h_scale = params.h_scale;
+                this.state.solar_pressure = params.solar_pressure;
+                this.state.c_light = params.c_light;
+                this.state.max_torque = params.max_torque;
+                this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale; // Update timeScale
+                const qNorm = Math.sqrt(params.q_desired.w ** 2 + params.q_desired.x ** 2 + params.q_desired.y ** 2 + params.q_desired.z ** 2);
+                if (qNorm === 0) {
+                    console.warn('Invalid quaternion (zero norm), using default [1, 0, 0, 0]');
+                    this.state.q_desired = new CANNON.Quaternion(1, 0, 0, 0);
+                } else {
+                    this.state.q_desired = new CANNON.Quaternion(
+                        params.q_desired.w / qNorm,
+                        params.q_desired.x / qNorm,
+                        params.q_desired.y / qNorm,
+                        params.q_desired.z / qNorm
+                    );
+                }
+            },
+            update: function(objects) {
+                if (!objects[0]) return;
+                const { body, mesh } = objects[0];
+                const r = body.position.clone(); // m
+                const v = body.velocity.clone(); // m/s
+                const rNorm = r.length(); // m
+
+                if (rNorm <= this.state.r_earth) {
+                    body.velocity.set(0, 0, 0);
+                    return;
+                }
+
+                // Gravitational acceleration
+                const aGravity = r.scale(-this.state.mu / Math.pow(rNorm, 3)); // m/s²
+
+                // Atmospheric drag
+                const alt = rNorm - this.state.r_earth; // m
+                const rho = this.state.rho_0 * Math.exp(-alt / this.state.h_scale);
+                const dragAcc = v.scale(-0.5 * rho * 2.2 * 2.0 / 500 * v.length()); // m/s²
+
+                // Solar pressure
+                const sunDir = new CANNON.Vec3(1.0, 0.0, 0.0);
+                const solarAcc = body.position.dot(sunDir) < 0
+                    ? new CANNON.Vec3(0, 0, 0)
+                    : sunDir.scale(this.state.solar_pressure * 2.0 * 1.5 / 500); // m/s²
+
+                // Total acceleration
+                const aTotal = aGravity.vadd(dragAcc).vadd(solarAcc);
+                utils.applyForce(body, aTotal, body.position);
+
+                // Attitude control
+                const q = body.quaternion.clone();
+                const qError = this.state.q_desired.mult(q.inverse());
+                const attErr = new CANNON.Vec3(
+                    qError.x * (qError.w >= 0 ? 1 : -1),
+                    qError.y * (qError.w >= 0 ? 1 : -1),
+                    qError.z * (qError.w >= 0 ? 1 : -1)
+                );
+                this.state.integralError.vadd(attErr.scale(0.2 * this.state.timeScale), this.state.integralError); // Scale dt by timeScale
+                const iTerm = this.state.integralError.scale(this.state.ki);
+                const controlTorque = attErr
+                    .scale(-this.state.kp)
+                    .vsub(body.angularVelocity.scale(this.state.kd))
+                    .vsub(iTerm);
+                controlTorque.x = Math.max(-this.state.max_torque, Math.min(this.state.max_torque, controlTorque.x));
+                controlTorque.y = Math.max(-this.state.max_torque, Math.min(this.state.max_torque, controlTorque.y));
+                controlTorque.z = Math.max(-this.state.max_torque, Math.min(this.state.max_torque, controlTorque.z));
+
+                // Gravity gradient torque
+                const rHat = r.unit();
+                const I_times_rHat = new CANNON.Vec3();
+                this.state.I.vmult(rHat, I_times_rHat);
+                const ggTorque = rHat.cross(I_times_rHat);
+                ggTorque.scale(3 * this.state.mu / Math.pow(rNorm, 3), ggTorque);
+
+                const totalTorque = controlTorque.vadd(ggTorque);
+                body.torque.vadd(totalTorque, body.torque);
+                this.state.currentTime += (1 / 60) * this.state.timeScale; // Scale time increment
+            },
+            getTelemetry: function(objects) {
+                if (!objects[0]) return {};
+                const { body } = objects[0];
+                const r = body.position.clone();
+                const v = body.velocity.clone();
+                const rMag = r.length(); // m
+                const theta = Math.acos(r.z / r.length());
+                const phi = Math.atan2(r.y, r.x);
+                const vR = v.dot(r.unit());
+                const vT = Math.sqrt(v.lengthSquared() - vR * vR);
+                return {
+                    'Time': { value: this.state.currentTime.toFixed(1), unit: 's' },
+                    'Simulation Speed': { value: this.state.timeScale.toFixed(2), unit: 'x' }, // New telemetry
+                    'Radius': { value: rMag.toFixed(2), unit: 'm' },
+                    'Latitude': { value: (90 - (theta * 180 / Math.PI)).toFixed(2), unit: 'deg' },
+                    'Longitude': { value: (phi * 180 / Math.PI).toFixed(2), unit: 'deg' },
+                    'Radial Velocity': { value: vR.toFixed(2), unit: 'm/s' },
+                    'Tangential Velocity': { value: vT.toFixed(2), unit: 'm/s' },
+                    'Azimuth': { value: (Math.atan2(r.y, r.x) * 180 / Math.PI).toFixed(2), unit: 'deg' },
+                    'Quaternion': { value: [body.quaternion.w, body.quaternion.x, body.quaternion.y, body.quaternion.z], unit: '' },
+                    'Position': { value: [r.x, r.y, r.z], unit: 'm' }
+                };
+            }
+            }),
+            debrisField: new Simulation('debrisField', {
+                name: 'Debris Field',
+                cameraControl: 'orbit',
+                parameters: [
+                    { id: 'timeScale', label: 'Simulation Speed', type: 'scalar', control: 'slider', min: 0.1, max: 100, step: 0.1, defaultValue: 1.0 }, // New parameter
+                    { id: 'debrisCount', label: 'Debris Count', type: 'scalar', defaultValue: 200 },
+                    { 
+                        id: 'fieldSize', 
+                        label: 'Field Size', 
+                        type: 'vector3d', 
+                        ids: ['width', 'height', 'depth'],
+                        control: 'slider', 
+                        min: { width: 500, height: 500, depth: 500 }, 
+                        max: { width: 5000, height: 5000, depth: 5000 }, 
+                        step: { width: 100, height: 100, depth: 100 }, 
+                        defaultValue: { width: 2000, height: 2000, depth: 2000 } 
+                    }
+                ],
+                telemetry: [
+                    { id: 'Time', type: 'scalar' }, // New telemetry
+                    { id: 'Simulation Speed', type: 'scalar' }, // New telemetry
+                    { id: 'Debris Count', type: 'scalar' },
+                    { id: 'Collisions', type: 'scalar' }
+                ],
+                init: async function(params) { // Made async for consistency
+                    world.gravity.set(0, 0, 0);
+                    this.state = { // Store state
+                        collisions: 0,
+                        currentTime: 0.0,
+                        timeScale: params.timeScale || simulationConfig.defaultTimeScale
+                    };
+                    const createdObjects = [];
+
+                    camera.position.set(0, 0, params.fieldSize.depth * 1.5);
+                    camera.lookAt(0, 0, 0);
+                    camera.updateProjectionMatrix();
+
+                    // Create debris objects
+                    for (let i = 0; i < params.debrisCount; i++) {
+                        const size = Math.random() * 20 + 5;
+                        const body = new CANNON.Body({ mass: size, shape: new CANNON.Sphere(size) });
+                        body.position.set(
+                            (Math.random() - 0.5) * params.fieldSize.width,
+                            (Math.random() - 0.5) * params.fieldSize.height,
+                            (Math.random() - 0.5) * params.fieldSize.depth
+                        );
+                        body.velocity.set(
+                            (Math.random() - 0.5) * 200,
+                            (Math.random() - 0.5) * 200,
+                            (Math.random() - 0.5) * 200
+                        );
+                        body.addEventListener('collide', () => this.state.collisions++);
+                        world.addBody(body);
+                        const mesh = new THREE.Mesh(
+                            new THREE.SphereGeometry(size),
+                            new THREE.MeshStandardMaterial({ 
+                                color: 0xaaaaaa,
+                                roughness: 0.5,
+                                metalness: 0.3
+                            })
+                        );
+                        scene.add(mesh);
+                        createdObjects.push({ mesh, body });
+                    }
+                    createStarfield();
+                    const axesHelper = new THREE.AxesHelper(params.fieldSize.width * 0.5);
+                    scene.add(axesHelper);
+
+                    return createdObjects;
+                },
+                updateParameters: function(params) {
+                    this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale; // Update timeScale
+                },
+                update: function(objects) {
+                    this.state.currentTime += (1 / 60) * this.state.timeScale; // Scale time increment
+                },
+                getTelemetry: function(objects) {
+                    return {
+                        'Time': { value: this.state.currentTime.toFixed(1), unit: 's' },
+                        'Simulation Speed': { value: this.state.timeScale.toFixed(2), unit: 'x' },
+                        'Debris Count': { value: objects.length, unit: '' },
+                        'Collisions': { value: this.state.collisions, unit: '' }
+                    };
+                },
+                cameraSettings: { 
+                    position: new THREE.Vector3(0, 0, 3000),
+                    near: 0.1,
+                    far: 100000
+                }
+            })
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            clock = new THREE.Clock();
+            camera = new THREE.PerspectiveCamera(simulationConfig.defaultCamera.fov, simContainer.clientWidth / simContainer.clientHeight, simulationConfig.defaultCamera.near, simulationConfig.defaultCamera.far);
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setSize(simContainer.clientWidth, simContainer.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 10, 7.5);
+            scene.add(dirLight);
+            world = new CANNON.World();
+            world.solver.iterations = 10;
+            world.solver.tolerance = 0.001;
+            chart = new Chart(document.getElementById('telemetry-chart').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'No Data',
+                        data: [],
+                        borderColor: simulationConfig.chartColors[0],
+                        backgroundColor: simulationConfig.chartColors[0] + '33',
+                        tension: 0.2,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            ticks: { color: '#88aaff' },
+                            grid: { color: 'rgba(0, 190, 255, 0.2)' }
+                        },
+                        y: {
+                            ticks: { color: '#88aaff' },
+                            grid: { color: 'rgba(0, 190, 255, 0.2)' },
+                            title: {
+                                display: true,
+                                text: 'Value',
+                                color: '#88aaff'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#E0E0E0' } }
+                    }
+                }
+            });
+
+            const simList = document.getElementById('simulation-list-container');
+            Object.entries(simulations).forEach(([id, sim]) => {
+                const item = document.createElement('div');
+                item.className = 'sim-item p-3 rounded-md cursor-pointer';
+                item.textContent = sim.name;
+                item.dataset.simId = id;
+                item.dataset.tooltip = `Run ${sim.name} simulation`;
+                simList.appendChild(item);
+            });
+            simList.addEventListener('click', (e) => {
+                if (e.target.matches('.sim-item')) loadSimulation(e.target.dataset.simId);
+            });
+
+            eventListeners.push(
+                    { element: document.getElementById('back-btn'), event: 'click', listener: unloadSimulation },
+                    { element: document.getElementById('start-btn'), event: 'click', listener: startSimulation },
+                    { element: document.getElementById('stop-btn'), event: 'click', listener: stopSimulation },
+                    { 
+                        element: document.getElementById('reset-btn'), 
+                        event: 'click', 
+                        listener: async () => {
+                            try {
+                                await resetSimulation(true);
+                            } catch (error) {
+                                console.error('Reset failed:', error);
+                                document.getElementById('telemetry-panel').innerHTML += `
+                                    <div class="bg-red-500/30 p-3 rounded-lg border border-red-500/20">
+                                        <p class="text-sm text-red-400">Error</p>
+                                        <p class="text-lg text-red-300">Reset failed: ${error.message}</p>
+                                    </div>`;
+                            }
+                        }
+                    },
+                    { element: document.getElementById('open-params-btn'), event: 'click', listener: openParameterModal },
+                    { element: document.getElementById('close-params-btn'), event: 'click', listener: () => parameterModal.classList.add('hidden') },
+                    { element: document.getElementById('apply-live-btn'), event: 'click', listener: applyLiveParametersFromModal },
+                    { element: document.getElementById('save-and-reset-btn'), event: 'click', listener: saveAndResetParametersFromModal },
+                    { element: window, event: 'resize', listener: onWindowResize }
+            );
+            eventListeners.forEach(({ element, event, listener }) => element.addEventListener(event, listener));
+
+            const audio = document.getElementById('background-audio');
+            const audioBtn = document.getElementById('audio-btn');
+            audioBtn.addEventListener('click', () => {
+                audio.muted = !audio.muted;
+                audioBtn.setAttribute('class','btn-primary ml-4')
+                audioBtn.querySelectorAll('svg, i').forEach(el => el.remove());
+                // Create new <i> with appropriate icon
+                const icon = document.createElement('i');
+                icon.setAttribute('data-lucide', audio.muted ? 'volume-x' : 'volume-2');
+                icon.className = 'h-4 w-4';
+                audioBtn.appendChild(icon);
+                lucide.createIcons();
+            });
+
+            window.addEventListener('click', function playAudioOnce() {
+                const audio = document.getElementById('background-audio');
+                if (audio && (audio.paused || audio.muted)) {
+                    audio.muted = false;
+                    audio.play().catch(e => {});
+                }
+                window.removeEventListener('click', playAudioOnce);
+            });
+
+            // Sidebar toggle
+            const sidebar = document.getElementById('sidebar');
+            const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+            if (toggleSidebarBtn && sidebar) {
+                toggleSidebarBtn.addEventListener('click', () => {
+                    const isCollapsed = sidebar.classList.toggle('collapsed');
+                    toggleSidebarBtn.setAttribute('class','btn-primary p-2')
+                    toggleSidebarBtn.querySelectorAll('svg, i').forEach(el => el.remove());
+                    // Create new <i> with appropriate icon
+                    const iconEl = document.createElement('i');
+                    iconEl.setAttribute('data-lucide', isCollapsed ? 'chevron-right' : 'chevron-left');
+                    iconEl.className = 'h-4 w-4';
+                    toggleSidebarBtn.append(iconEl)
+                    lucide.createIcons();
+                
+                    toggleSidebarBtn.setAttribute('title', isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar');
+                    
+                    onWindowResize(); // Trigger resize
+                });
+            } else {
+                console.error('Toggle button or sidebar not found');
+            }
+
+            createStarfield();
+            lucide.createIcons();
+            unloadSimulation();
+            animate();
+        }
+
+        function createStarfield() {
+            const v = [], c = [];
+            for (let i = 0; i < 10000; i++) {
+                v.push(THREE.MathUtils.randFloatSpread(50000), THREE.MathUtils.randFloatSpread(50000), THREE.MathUtils.randFloatSpread(50000));
+                const brightness = Math.random() * 0.5 + 0.5;
+                c.push(brightness, brightness, brightness);
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+            g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3));
+            starfield = new THREE.Points(g, new THREE.PointsMaterial({ size: 3, vertexColors: true, transparent: true }));
+            scene.add(starfield);
+        }
+
+
+        function onWindowResize() {
+            if (!renderer || !camera) return;
+            const container = document.getElementById('simulation-container');
+            const telemetryColumn = document.getElementById('telemetry-column');
+            
+            setTimeout(() => {
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                
+                // Update camera aspect ratio
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                
+                // Update renderer size
+                renderer.setSize(width, height, true); // true updates CSS size
+                renderer.setPixelRatio(window.devicePixelRatio);
+                
+                // Force render to update viewport
+                if (scene && camera) renderer.render(scene, camera);
+                
+                // Update chart if active
+                if (chart && activeSimulation) {
+                    const chartCanvas = document.getElementById('telemetry-chart');
+                    chartCanvas.style.height = '200px';
+                    chartCanvas.style.width = '100%';
+                    chartCanvas.width = chartCanvas.parentElement.clientWidth;
+                    try {
+                        chart.resize();
+                        chart.update('none');
+                    } catch (error) {
+                        console.error('Chart resize failed:', error);
+                    }
+                }
+            }, 350); // Match sidebar transition duration
+        }
+                        
+
+
+        function onSimulationStart() {
+            // Assume this is called when a simulation starts
+            activeSimulation = true; // Update based on your logic
+            onWindowResize(); // Force resize on simulation start
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function setEngineStatus(isOnline) {
+            const indicator = document.getElementById('engine-status-indicator');
+            const text = document.getElementById('engine-status-text');
+            indicator.className = `w-3 h-3 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-yellow-400'} inline-block mr-2`;
+            text.className = isOnline ? 'text-green-400' : 'text-yellow-400';
+            text.textContent = isOnline ? 'ONLINE' : 'STANDBY';
+        }
+
+        async function loadSimulation(simId) {
+            if (!simId || !simulations[simId]) {
+                console.warn(`Invalid simulation ID: ${simId}`);
+                return;
+            }
+            stopSimulation();
+            activeSimulation = simulations[simId];
+            document.getElementById('viewport-placeholder').innerHTML = '<div class="loading-spinner"></div><p>Loading simulation...</p>';
+            const simList = document.getElementById('simulation-list-container');
+            document.querySelectorAll('.sim-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.simId === simId);
+                if (item.dataset.simId === simId) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+            simList.classList.add('constrained');
+            document.getElementById('viewport-placeholder').classList.add('hidden');
+            document.getElementById('telemetry-placeholder').classList.add('hidden');
+            document.getElementById('active-sim-controls').classList.remove('hidden');
+            document.getElementById('active-sim-telemetry').classList.remove('hidden');
+            document.getElementById('back-btn').classList.remove('hidden');
+            document.getElementById('standby-panel').classList.add('hidden');
+            setEngineStatus(true);
+            try {
+                await resetSimulation(true);
+                document.getElementById('viewport-placeholder').innerHTML = '';
+            } catch (error) {
+                console.error('Failed to load simulation:', error);
+                document.getElementById('viewport-placeholder').innerHTML = '<p>Error loading simulation. Please try again.</p>';
+            }
+        }
+
+
+
+        function unloadSimulation() {
+            stopSimulation();
+            activeSimulation = null;
+            document.querySelectorAll('.sim-item.active').forEach(i => i.classList.remove('active'));
+            document.getElementById('simulation-list-container').classList.remove('constrained');
+            document.getElementById('viewport-placeholder').classList.remove('hidden');
+            document.getElementById('telemetry-placeholder').classList.remove('hidden');
+            document.getElementById('active-sim-controls').classList.add('hidden');
+            document.getElementById('active-sim-telemetry').classList.add('hidden');
+            document.getElementById('back-btn').classList.add('hidden');
+            document.getElementById('standby-panel').classList.remove('hidden');
+            cleanupSimulation();
+            setEngineStatus(false);
+            onWindowResize();
+        }
+
+        function cleanupSimulation() {
+            // Remove objects in objectsToUpdate
+            objectsToUpdate.forEach(o => {
+                if (o.mesh.isInstancedMesh) {
+                    o.mesh.dispose();
+                    scene.remove(o.mesh);
+                } else {
+                    scene.remove(o.mesh);
+                    utils.disposeObject(o.mesh);
+                }
+                world.removeBody(o.body);
+            });
+            objectsToUpdate = [];
+
+            // Clear all scene children (meshes, lights, etc.)
+            while (scene.children.length > 0) {
+                const obj = scene.children[0];
+                scene.remove(obj);
+                utils.disposeObject(obj);
+            }
+            scene.background = null;
+            renderer.clear();
+
+            // Clear physics world bodies
+            world.bodies.forEach(body => world.removeBody(body));
+
+            // Reinitialize essential scene elements
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 10, 7.5);
+            scene.add(dirLight);
+
+            // Clean up simulation state
+            if (activeSimulation?.state) {
+                if (activeSimulation.state.earthModel) {
+                    utils.disposeObject(activeSimulation.state.earthModel);
+                    activeSimulation.state.earthModel = null;
+                }
+                if (activeSimulation.state.satModel) {
+                    utils.disposeObject(activeSimulation.state.satModel);
+                    activeSimulation.state.satModel = null;
+                }
+                if (activeSimulation.userControls?.keys) {
+                    activeSimulation.userControls.keys = {};
+                }
+            }
+
+            inputManager.cleanup();
+        }
+
+        /////////// Handle Mouse ////////
+        function addCustomCameraListeners() {
+            canvas.addEventListener('mousedown', cam_mousedown);
+            canvas.addEventListener('mouseup', cam_mouseup);
+            canvas.addEventListener('contextmenu', cam_contextmenu);
+            canvas.addEventListener('mousemove', cam_mousemove_debounced);
+            canvas.addEventListener('wheel', cam_wheel_debounced);
+        }
+
+        function removeCustomCameraListeners() {
+            canvas.removeEventListener('mousedown', cam_mousedown);
+            canvas.removeEventListener('mouseup', cam_mouseup);
+            canvas.removeEventListener('contextmenu', cam_contextmenu);
+            canvas.removeEventListener('mousemove', cam_mousemove_debounced);
+            canvas.removeEventListener('wheel', cam_wheel_debounced);
+        }
+        // Handler functions
+        function cam_mousedown(e) {
+            if (e.button === 0) isMouseDown = true;
+            if (e.button === 2) isRightMouseDown = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        }
+
+        function cam_mouseup(e) {
+            if (e.button === 0) isMouseDown = false;
+            if (e.button === 2) isRightMouseDown = false;
+        }
+
+        function cam_contextmenu(e) { e.preventDefault(); }
+
+        function cam_mousemove(e) {
+            if (!isMouseDown && !isRightMouseDown) return;
+            const dX = e.clientX - previousMousePosition.x, dY = e.clientY - previousMousePosition.y;
+            if (isMouseDown) {
+                const target = objectsToUpdate[0]?.cameraTarget || new THREE.Vector3(0, 0, 0);
+                const spherical = new THREE.Spherical();
+                const camPos = camera.position.clone().sub(target);
+                spherical.setFromVector3(camPos);
+                spherical.theta -= dX * 0.01;
+                spherical.phi -= dY * 0.01;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+                camPos.setFromSpherical(spherical);
+                camera.position.copy(target).add(camPos);
+            } else if (isRightMouseDown) {
+                camera.position.x -= dX * 0.5;
+                camera.position.y += dY * 0.5;
+            }
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        }
+
+        // Use a stable debounce function!
+        const cam_mousemove_debounced = utils.debounce(cam_mousemove, 10);
+
+        function cam_wheel(e) {
+            const target = objectsToUpdate[0]?.cameraTarget || new THREE.Vector3(0, 0, 0);
+            const distance = camera.position.distanceTo(target);
+            const delta = e.deltaY * 0.01 * distance;
+            camera.position.addScaledVector(camera.position.clone().sub(target).normalize(), delta);
+        }
+        const cam_wheel_debounced = utils.debounce(cam_wheel, 10);
+
+        ///////////////////
+        function openParameterModal() {
+            if (!activeSimulation) return;
+            modalParameters = JSON.parse(JSON.stringify(currentParameters));
+            renderParameterControls(modalParameters);
+            parameterModal.classList.remove('hidden');
+        }
+
+        function validateModalInputs() {
+            const form = document.getElementById('parameter-form');
+            let isValid = true;
+            form.querySelectorAll('.param-input').forEach(el => el.classList.remove('input-error'));
+            document.getElementById('validation-error-msg').classList.add('hidden');
+
+            activeSimulation.parameters.forEach(p => {
+                if (p.type === 'vector3d' || p.type === 'vector4d') {
+                    const ids = p.ids || (p.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                    ids.forEach(axis => {
+                        const el = form.querySelector(`[data-param-id="${p.id}"][data-axis="${axis}"]`);
+                        const val = utils.validateNumber(el.value, p.min?.[axis], p.max?.[axis]);
+                        if (val === false) {
+                            isValid = false;
+                            el.classList.add('input-error');
+                        } else {
+                            modalParameters[p.id][axis] = val;
+                            el.value = val;
+                        }
+                    });
+                } else {
+                    const el = form.querySelector(`[data-param-id="${p.id}"]`);
+                    const val = utils.validateNumber(el.value, p.min, p.max);
+                    if (val === false) {
+                        isValid = false;
+                        el.classList.add('input-error');
+                    } else {
+                        modalParameters[p.id] = val;
+                        el.value = val;
+                    }
+                }
+            });
+
+            if (!isValid) document.getElementById('validation-error-msg').classList.remove('hidden');
+            return isValid;
+        }
+
+
+        function applyLiveParametersFromModal() {
+            if (!validateModalInputs()) return;
+            currentParameters = JSON.parse(JSON.stringify(modalParameters));
+            renderParameterControls(currentParameters);
+            activeSimulation.updateParameters(currentParameters);
+            updateTelemetryDisplay();
+            parameterModal.classList.add('hidden');
+        }
+
+        async function saveAndResetParametersFromModal() {
+            if (!validateModalInputs()) return;
+            currentParameters = JSON.parse(JSON.stringify(modalParameters));
+            parameterModal.classList.add('hidden');
+            try {
+                await resetSimulation(false);
+            } catch (error) {
+                console.error('Failed to reset simulation with new parameters:', error);
+                document.getElementById('validation-error-msg').classList.remove('hidden');
+                document.getElementById('validation-error-msg').textContent = 'Failed to apply parameters. Please try again.';
+            }
+        }
+
+        function renderParameterControls(paramSource) {
+            const quickPanel = document.getElementById('quick-access-parameters-panel');
+            const modalForm = document.getElementById('parameter-form');
+            quickPanel.innerHTML = '';
+            modalForm.innerHTML = '';
+
+            const quickAccessParams = activeSimulation.parameters.filter(p => p.control === 'slider');
+            if (quickAccessParams.length > 0) {
+                quickPanel.innerHTML = `<h2 class="text-base sm:text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2 flex items-center"><i data-lucide="sliders" class="h-4 w-4 mr-2"></i>Quick Parameters</h2>`;
+            }
+
+            activeSimulation.parameters.forEach(p => {
+                const value = paramSource[p.id];
+                const label = `${p.label}${p.units ? ` (${p.units})` : ''}`;
+                let modalHtml = `<div><label class="block text-sm font-medium text-gray-300 mb-2" data-tooltip="${label}">${label}</label>`;
+                if (p.type === 'vector3d' || p.type === 'vector4d') {
+                    const ids = p.ids || (p.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                    modalHtml += `<div class="grid grid-cols-${ids.length} gap-2 vector-input">`;
+                    ids.forEach((axis, index) => {
+                        modalHtml += `<input data-param-id="${p.id}" data-axis="${axis}" type="number" value="${value[axis]}" min="${p.min?.[axis] ?? -Infinity}" max="${p.max?.[axis] ?? Infinity}" step="${p.step?.[axis] ?? 0.1}" class="param-input modal-input">`;
+                    });
+                    modalHtml += `</div></div>`;
+                } else {
+                    modalHtml += `<input data-param-id="${p.id}" type="number" value="${value}" min="${p.min ?? -Infinity}" max="${p.max ?? Infinity}" step="${p.step ?? 0.1}" class="param-input modal-input scalar-input"></div>`;
+                }
+                modalForm.innerHTML += modalHtml;
+
+                if (p.control === 'slider') {
+                    if (p.type === 'vector3d' || p.type === 'vector4d') {
+                        const ids = p.ids || (p.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                        quickPanel.innerHTML += `<div><label class="block text-sm font-medium text-gray-300 mb-1" data-tooltip="${label}">${label}</label></div>`;
+                        ids.forEach((axis, index) => {
+                            quickPanel.innerHTML += `<div class="pl-4"><label class="block text-xs font-medium text-gray-400">${axis.toUpperCase()}</label><div class="flex items-center space-x-3 mt-1"><input data-param-id="${p.id}" data-axis="${axis}" type="range" min="${p.min?.[axis] ?? -Infinity}" max="${p.max?.[axis] ?? Infinity}" step="${p.step?.[axis] ?? 0.1}" value="${value[axis]}" class="param-input quick-input"><span id="${p.id}-${axis}-value" class="text-sm text-blue-300 w-20 text-right font-mono">${value[axis].toFixed(2)}</span></div></div>`;
+                        });
+                    } else {
+                        quickPanel.innerHTML += `<div><label class="block text-sm font-medium text-gray-300 mb-1" data-tooltip="${label}">${label}</label><div class="flex items-center space-x-3 mt-1"><input data-param-id="${p.id}" type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${value}" class="param-input quick-input"><span id="${p.id}-value" class="text-sm text-blue-300 w-20 text-right font-mono">${value.toFixed(2)}</span></div></div>`;
+                    }
+                }
+            });
+
+            document.querySelectorAll('.quick-input').forEach(input => input.addEventListener('input', handleParameterChange));
+            document.querySelectorAll('.modal-input').forEach(input => input.addEventListener('input', handleModalParameterChange));
+            lucide.createIcons();
+        }
+
+        function handleModalParameterChange(e) {
+            const { paramId, axis } = e.target.dataset;
+            const paramDef = activeSimulation.parameters.find(p => p.id === paramId);
+            let value = utils.validateNumber(e.target.value, paramDef.min?.[axis] ?? paramDef.min, paramDef.max?.[axis] ?? paramDef.max);
+            if (value === false) return;
+            if (paramDef.type === 'vector3d' || paramDef.type === 'vector4d') {
+                modalParameters[paramId][axis] = value;
+            } else {
+                modalParameters[paramId] = value;
+            }
+            e.target.value = value;
+        }
+
+        function handleParameterChange(e) {
+            const { paramId, axis } = e.target.dataset;
+            const paramDef = activeSimulation.parameters.find(p => p.id === paramId);
+            let value = utils.validateNumber(e.target.value, paramDef.min?.[axis] ?? paramDef.min, paramDef.max?.[axis] ?? paramDef.max);
+            if (value === false) return;
+            if (paramDef.type === 'vector3d' || paramDef.type === 'vector4d') {
+                currentParameters[paramId][axis] = value;
+                document.getElementById(`${paramId}-${axis}-value`).textContent = value.toFixed(2);
+            } else {
+                currentParameters[paramId] = value;
+                document.getElementById(`${paramId}-value`).textContent = value.toFixed(2);
+            }
+            activeSimulation.updateParameters(currentParameters);
+        }
+
+        function startSimulation() {
+            if (simulationRunning || !activeSimulation) return;
+            simulationRunning = true;
+            document.getElementById('start-btn').classList.add('btn-active');
+            document.getElementById('stop-btn').classList.remove('btn-active');
+            clock.start();
+        }
+
+        function stopSimulation() {
+            simulationRunning = false;
+            document.getElementById('stop-btn').classList.add('btn-active');
+            document.getElementById('start-btn').classList.remove('btn-active');
+            clock.stop();
+        }
+
+        async function resetSimulation(useDefaults) {
+            if (!activeSimulation) return;
+            stopSimulation();
+            cleanupSimulation();
+            if (useDefaults) {
+                currentParameters = {};
+                activeSimulation.parameters.forEach(p => {
+                    if (p.type === 'vector3d' || p.type === 'vector4d') {
+                        const ids = p.ids || (p.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                        currentParameters[p.id] = {};
+                        ids.forEach((axis, index) => {
+                            currentParameters[p.id][axis] = p.defaultValue[axis] !== undefined ? p.defaultValue[axis] : 0;
+                        });
+                    } else {
+                        currentParameters[p.id] = p.defaultValue;
+                    }
+                });
+            }
+            try {
+                objectsToUpdate = await activeSimulation.init(currentParameters); // Await async init
+                if (!Array.isArray(objectsToUpdate)) {
+                    console.error('init did not return an array:', objectsToUpdate);
+                    objectsToUpdate = []; // Fallback to empty array
+                }
+            } catch (error) {
+                console.error('Error initializing simulation:', error);
+                objectsToUpdate = []; // Fallback to empty array on error
+            }
+            enableCameraControl(activeSimulation.cameraControl || 'none');
+            camera.position.copy(activeSimulation.cameraSettings.position);
+            camera.near = activeSimulation.cameraSettings.near || simulationConfig.defaultCamera.near;
+            camera.far = activeSimulation.cameraSettings.far || simulationConfig.defaultCamera.far;
+            camera.updateProjectionMatrix();
+            camera.lookAt(objectsToUpdate[0]?.cameraTarget || new THREE.Vector3(0, 0, 0));
+            renderParameterControls(currentParameters);
+            updateTelemetryDisplay();
+            resetChart();
+            const userControlsPanel = document.getElementById('user-controls-panel');
+            const userControlsContent = document.getElementById('user-controls-content');
+            if (activeSimulation.userControls) {
+                userControlsPanel.classList.remove('hidden');
+                userControlsContent.innerHTML = activeSimulation.userControls.html;
+                inputManager.setupButtonListeners(activeSimulation.id);
+            } else {
+                userControlsPanel.classList.add('hidden');
+                userControlsContent.innerHTML = '';
+            }
+            lucide.createIcons();
+            onWindowResize(); // Ensure renderer updates
+        }
+
+        function resetChart() {
+            if (!activeSimulation) return;
+            const telemetrySelect = document.getElementById('telemetry-select');
+            telemetrySelect.innerHTML = '';
+            const telemetryData = activeSimulation.getTelemetry(objectsToUpdate);
+            
+            const numericalTelemetry = [];
+            
+            activeSimulation.telemetry.forEach(t => {
+                const { value } = telemetryData[t.id] || { value: null };
+                if (typeof value === 'number' || 
+                    (typeof value === 'string' && !isNaN(Number(value))) ||
+                    (typeof value === 'string' && value.includes('/'))) {
+                    numericalTelemetry.push(t.id); // Scalar values
+                } else if (Array.isArray(value) && value.length > 0 && value.length <= 4 && 
+                        value.every(v => typeof v === 'number' || (typeof v === 'string' && !isNaN(Number(v))))) {
+                    const ids = t.ids || (t.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                    ids.slice(0, value.length).forEach((axis, index) => {
+                        numericalTelemetry.push(`${t.id}.${axis}`);
+                    });
+                }
+            });
+            
+            numericalTelemetry.forEach(t => {
+                const option = document.createElement('option');
+                option.value = t;
+                option.textContent = t;
+                telemetrySelect.appendChild(option);
+            });
+
+            chart.data.labels = [];
+            chart.data.datasets = [{
+                label: numericalTelemetry[0] || 'No Data',
+                data: [],
+                borderColor: simulationConfig.chartColors[0],
+                backgroundColor: simulationConfig.chartColors[0] + '33',
+                tension: 0.2,
+                pointRadius: 0
+            }];
+            chart.options.scales.y.title.text = numericalTelemetry[0] || 'Value';
+            try {
+                chart.update('none');
+                document.getElementById('telemetry-chart').style.display = 'block';
+            } catch (error) {
+                console.error('Chart initialization failed:', error);
+            }
+
+            telemetrySelect.addEventListener('change', () => {
+                const selectedMetric = telemetrySelect.value;
+                chart.data.datasets[0].label = selectedMetric;
+                chart.data.datasets[0].data = [];
+                chart.options.scales.y.title.text = selectedMetric;
+                try {
+                    chart.update('none');
+                } catch (error) {
+                    console.error('Chart update on metric change failed:', error);
+                }
+            });
+        }
+
+        function updateTelemetryDisplay() {
+            if (!activeSimulation) {
+                document.getElementById('telemetry-panel').innerHTML = '';
+                return;
+            }
+            const telemetry = activeSimulation.getTelemetry(objectsToUpdate);
+            let html = '';
+            activeSimulation.telemetry.forEach(t => {
+                const { value, unit } = telemetry[t.id] || { value: 'N/A', unit: '' };
+                let displayValue;
+                if (Array.isArray(value)) {
+                    const ids = t.ids || (t.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                    displayValue = ids
+                        .slice(0, value.length)
+                        .map((axis, i) => `${axis}: ${Number(value[i]).toFixed(4)}`)
+                        .join(', ');
+                } else {
+                    displayValue = typeof value === 'number' ? value.toFixed(2) : value;
+                }
+                html += `
+                    <div class="bg-black/30 p-3 rounded-lg border border-blue-500/20">
+                        <p class="text-sm text-gray-400">${t.id}</p>
+                        <p class="telemetry-value ${Array.isArray(value) ? 'vector' : ''} text-lg">${displayValue} ${unit}</p>
+                    </div>`;
+            });
+            document.getElementById('telemetry-panel').innerHTML = html;
+
+            if (!simulationRunning) return;
+            const telemetrySelect = document.getElementById('telemetry-select');
+            const selectedMetric = telemetrySelect.value;
+            chart.data.labels.push((clock.getElapsedTime()).toFixed(1));
+            let value = telemetry[selectedMetric]?.value || 0;
+
+            if (selectedMetric.includes('.')) {
+                const [baseMetric, component] = selectedMetric.split('.');
+                const telemetryDef = activeSimulation.telemetry.find(t => t.id === baseMetric);
+                const vectorValue = telemetry[baseMetric]?.value;
+                if (Array.isArray(vectorValue)) {
+                    const ids = telemetryDef?.ids || (telemetryDef?.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
+                    const index = ids.indexOf(component);
+                    value = vectorValue[index] !== undefined ? Number(vectorValue[index]) : 0;
+                }
+            } else if (typeof value === 'string' && value.includes('/')) {
+                value = parseFloat(value.split('/')[0]) || 0;
+            } else if (typeof value === 'string' && !isNaN(Number(value))) {
+                value = parseFloat(value);
+            } else if (typeof value !== 'number') {
+                value = 0;
+            }
+
+            chart.data.datasets[0].data.push(value);
+            if (chart.data.datasets[0].data.length > 300) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            try {
+                chart.update('none');
+            } catch (error) {
+                console.error('Chart update failed:', error);
+            }
+        }
+
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            if (!activeSimulation || !Array.isArray(objectsToUpdate) || objectsToUpdate.length === 0) {
+                starfield.rotation.y += 0.0001;
+                if (renderer && camera) renderer.render(scene, camera);
+                return;
+            }
+            let deltaTime = clock.getDelta();
+            if (deltaTime > 0.1) deltaTime = 1 / 60;
+            const timeScale = activeSimulation.state.timeScale || simulationConfig.defaultTimeScale;
+            if (simulationRunning) {
+                world.step(simulationConfig.defaultUpdateInterval * timeScale, deltaTime * timeScale, 3);
+                activeSimulation.update(objectsToUpdate);
+                inputManager.update(activeSimulation.id);
+            }
+
+            objectsToUpdate.forEach(o => {
+                if (o.mesh.isInstancedMesh) {
+                    const matrix = new THREE.Matrix4();
+                    matrix.setPosition(o.body.position);
+                    matrix.makeRotationFromQuaternion(new THREE.Quaternion(o.body.quaternion.x, o.body.quaternion.y, o.body.quaternion.z, o.body.quaternion.w));
+                    matrix.scale(new THREE.Vector3(o.body.shape.radius || 1, o.body.shape.radius || 1, o.body.shape.radius || 1));
+                    o.mesh.setMatrixAt(o.instanceId, matrix);
+                    o.mesh.instanceMatrix.needsUpdate = true;
+                } else {
+                    o.mesh.position.copy(o.body.position);
+                    o.mesh.quaternion.copy(o.body.quaternion);
+                }
+            });
+            if (simulationRunning) {
+                updateTelemetryDisplay();
+            }
+            if (orbitControls) orbitControls.update();
+            camera.lookAt(objectsToUpdate[0]?.cameraTarget || new THREE.Vector3(0, 0, 0));
+            starfield.rotation.y += 0.0001 * timeScale; // Scale starfield rotation
+            if (renderer && camera) renderer.render(scene, camera);
+        }
+        init();
+    </script>
+</body>
+</html>

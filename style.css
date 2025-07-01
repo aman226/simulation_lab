@@ -1,0 +1,128 @@
+/* ... (your existing styles remain the same for non-collapsed states) ... */
+
+/* Ensure main fills the available height and uses flexbox for its children */
+main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column; /* Default to column for small screens */
+    overflow: hidden;
+    height: calc(100vh - 64px); /* Explicitly set main height */
+}
+
+/* Base styles for simulation container and telemetry column */
+#simulation-container {
+    flex-grow: 1; /* Allow it to take available space */
+    position: relative;
+    width: 100%; /* Default to full width for small screens */
+    height: 100%; /* Take full height of main in column layout */
+}
+
+#simulation-canvas {
+    width: 100% !important; /* Ensure canvas takes 100% of parent width */
+    height: 100% !important; /* Ensure canvas takes 100% of parent height */
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#telemetry-column {
+    flex-grow: 1; /* Allow it to take available space */
+    overflow-y: auto;
+    width: 100%; /* Default to full width for small screens */
+    height: auto; /* Allow height to adjust */
+}
+
+/* Specific styles for the sidebar and its collapsed state */
+#sidebar {
+    transition: transform 0.3s ease, width 0.3s ease, padding 0.3s ease; /* Add width and padding to transition */
+    transform: translateX(0);
+    flex-shrink: 0; /* Prevents sidebar from shrinking initially */
+    width: 100%; /* Default width for mobile */
+}
+
+#sidebar.collapsed {
+    transform: translateX(-100%); /* Move off-screen */
+    width: 0; /* Crucial: collapse its allocated width */
+    padding-left: 0; /* Remove padding when collapsed */
+    padding-right: 0; /* Remove padding when collapsed */
+    min-width: 0; /* Ensure no minimum width is applied */
+    overflow: hidden; /* Hide any content that might try to overflow */
+}
+
+/* Media query for larger screens (lg breakpoint) */
+@media (min-width: 1024px) {
+    main {
+        flex-direction: row; /* Switch to row layout */
+        height: 100vh; /* Full viewport height */
+    }
+
+    #sidebar {
+        position: relative; /* Keep sidebar in normal flow */
+        width: 21.333%; /* Tailwind lg:w-4/12 is 33.333% */
+        
+    }
+
+    #sidebar.collapsed {
+        /* These properties are explicitly set for desktop collapse */
+        width: 0 !important; /* Force width to 0 */
+        padding-left: 0 !important; /* Remove padding */
+        padding-right: 0 !important; /* Remove padding */
+        border-right: none !important; /* Remove border */
+        overflow: hidden !important; /* Hide content */
+        transform: translateX(-100%); /* Still useful for visual transition */
+    }
+
+    #simulation-container {
+        flex-grow: 1; /* Expand to fill remaining space */
+        width: auto; /* Let flex-grow determine width */
+        height: 100%; /* Ensure full height */
+    }
+
+    /* When sidebar is collapsed, simulation-container should take remaining space */
+    /* This rule specifically ensures sim-container takes full width when sidebar is collapsed */
+    #sidebar.collapsed ~ #simulation-container {
+        width: 100%; /* No need for !important here if flex-grow is working, but it acts as a strong fallback */
+    }
+
+    #telemetry-column {
+        flex-shrink: 0; /* Don't allow it to shrink */
+        width: 25%; /* Tailwind lg:w-3/12 is 25% */
+        height: 100%; /* Ensure full height */
+    }
+}
+
+[data-tooltip]:hover:after {
+    content: attr(data-tooltip);
+    position: absolute;
+    background: #1A2C47;
+    color: #E0E0E0;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000; /* Increase z-index to ensure it appears above other elements */
+    
+    left: 50%; /* Center horizontally */
+    transform: translateX(-50%); /* Adjust to center the tooltip */
+    white-space: normal; /* Prevent text wrapping */
+}
+
+.telemetry-value.vector {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
+.loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #00BEFF;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
