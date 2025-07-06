@@ -10,8 +10,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <!-- Replace Cannon.js with Ammo.js -->
+    <script src=./builds/ammo.js></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="./style.css">
@@ -289,7 +289,7 @@
             </div>
             <div class="mt-auto text-xs text-gray-500 text-center pt-4">
                 <p>Orbit: LMB+drag, Zoom: Scroll, Pan: RMB+drag</p>
-                <p>© 2025 AeroSim Project</p>
+                <p>© 2025 AeroLab Project</p>
             </div>
         </div>
         <div id="standby-panel" class="flex-grow flex items-center justify-center text-gray-600">
@@ -359,6 +359,9 @@
     </div>
 
     <script type="module">
+        // Wait for Ammo.js to load
+        Ammo().then(function(Ammo) {
+
         // Global state
         let scene, camera, renderer, world, clock, starfield, chart;
         let activeSimulation = null;
@@ -500,8 +503,15 @@
                 if (obj.isInstancedMesh) obj.dispose();
                 if (obj.children) obj.children.forEach(child => utils.disposeObject(child));
             },
-            applyForce: (body, force, position) => {
-                body.applyForce(new CANNON.Vec3().copy(force), new CANNON.Vec3().copy(position));
+            applyForce: (body, force) => {
+                const forceVec = new Ammo.btVector3(force.x(), force.y(), force.z());
+                body.applyForce(forceVec, new Ammo.btVector3(0, 0, 0)); // Apply at center of mass
+                Ammo.destroy(forceVec);
+            },
+            applyTorque: (body, torque) => {
+                const torqueVec = new Ammo.btVector3(torque.x(), torque.y(), torque.z());
+                body.applyTorque(torqueVec);
+                Ammo.destroy(torqueVec);
             },
             validateNumber: (value, min, max) => {
                 const num = parseFloat(value);
@@ -543,22 +553,22 @@
             name: 'LEO Satellite Simulator',
             cameraControl: 'orbit',
             parameters: [
-                { id: 'kp', label: 'Proportional Gain (Kp)', type: 'scalar', control: 'slider', min: 0, max: 10, step: 0.01, defaultValue: 0.08 },
+                { id: 'kp', label: 'Proportional Gain (Kp)', type: 'scalar', control: 'slider', min: 0, max: 10, step: 0.01, defaultValue: 0.04 },
                 { id: 'ki', label: 'Integral Gain (Ki)', type: 'scalar', control: 'slider', min: 0, max: 5, step: 0.01, defaultValue: 0.0 },
-                { id: 'kd', label: 'Derivative Gain (Kd)', type: 'scalar', control: 'slider', min: 0, max: 10, step: 0.01, defaultValue: 0.44 },
+                { id: 'kd', label: 'Derivative Gain (Kd)', type: 'scalar', control: 'slider', min: 0, max: 10, step: 0.01, defaultValue: 10.0 },
                 { id: 'q_desired', label: 'Desired Quaternion', type: 'vector4d', defaultValue: { w: 1.0, x: 0.0, y: 0.0, z: 0.0 } },
                 { id: 'mu', label: 'Gravitational Parameter', units: 'm³/s²', type: 'scalar', defaultValue: 3.986e14 },
                 { id: 'r_earth', label: 'Earth Radius', units: 'm', type: 'scalar', defaultValue: 6371e3 },
-                { id: 'rho_0', label: 'Reference Density', units: 'kg/m³', type: 'scalar', control: 'slider', min: 0, max: 1e-9, step: 0.01e-9, defaultValue: 0 },
+                { id: 'rho_0', label: 'Reference Density', units: 'kg/m³', type: 'scalar', min: 0, max: 1e-9, step: 0.01e-9, defaultValue: 0 },
                 { id: 'h_scale', label: 'Scale Height', units: 'm', type: 'scalar', defaultValue: 100e3 },
-                { id: 'solar_pressure', label: 'Solar Pressure', units: 'N/m²', type: 'scalar', control: 'slider', min: 3e-6, max: 6e-6, step: 0.01e-6, defaultValue: 4.5e-6 },
+                { id: 'solar_pressure', label: 'Solar Pressure', units: 'N/m²', type: 'scalar', min: 0, max: 6e-6, step: 0.01e-6, defaultValue: 0 },
                 { id: 'c_light', label: 'Speed of Light', units: 'm/s', type: 'scalar', defaultValue: 3e8 },
-                { id: 'max_torque', label: 'Max Control Torque', units: 'N·m', type: 'scalar', control: 'slider', min: 0.05, max: 0.5, step: 0.01, defaultValue: 0.1 },
+                { id: 'max_torque', label: 'Max Control Torque', units: 'N·m', type: 'scalar', control: 'slider', min: 0.0001, max: 0.1, step: 0.01, defaultValue: 0.1 },
                 { id: 'timeScale', label: 'Simulation Speed', type: 'scalar', control: 'slider', min: 0.1, max: 100, step: 0.1, defaultValue: 1.0 }
             ],
             telemetry: [
                 { id: 'Time', type: 'scalar' },
-                { id: 'Simulation Speed', type: 'scalar' }, // New telemetry
+                { id: 'Simulation Speed', type: 'scalar' },
                 { id: 'Radius', type: 'scalar' },
                 { id: 'Latitude', type: 'scalar' },
                 { id: 'Longitude', type: 'scalar' },
@@ -571,15 +581,16 @@
             userControls: null,
             cameraSettings: { position: new THREE.Vector3(0, 0, (6371e3 + 400e3) * 1.5), near: 1e5, far: 1e9 },
             init: async function(params) {
-                world.gravity.set(0, 0, 0);
+                world.setGravity(new Ammo.btVector3(0, 0, 0));
                 this.state = {
-                    I: new CANNON.Mat3([10.0, 0, 0, 0, 8.0, 0, 0, 0, 5.0]),
-                    integralError: new CANNON.Vec3(0, 0, 0),
+                    I: new Ammo.btVector3(10.0, 8.0, 5.0), // Diagonal inertia (Ixx, Iyy, Izz)
+                    integralError: new Ammo.btVector3(0, 0, 0),
                     currentTime: 0.0,
-                    timeScale: params.timeScale || simulationConfig.defaultTimeScale, // Initialize timeScale
+                    timeScale: params.timeScale || simulationConfig.defaultTimeScale,
                     loader: new THREE.GLTFLoader(),
                     earthModel: null,
-                    satModel: null
+                    satModel: null,
+                    mass: 500 // Store mass here
                 };
 
                 // Load space skybox
@@ -621,17 +632,22 @@
                     console.error(error.message);
                 }
 
-                // Load satellite model
-                const satBody = new CANNON.Body({
-                    mass: 500,
-                    shape: new CANNON.Sphere(1)
-                });
-                satBody.inertia.set(10, 8, 5);
-                satBody.position.set(0, 0, params.r_earth + 400e3);
-                satBody.velocity.set(7676, 0, 0);
-                satBody.quaternion.set(1.0, 0.0, 0.0, 0.0);
-                satBody.angularVelocity.set(0, 0, 0.01);
-                world.addBody(satBody);
+                // Create satellite body
+                const sphereShape = new Ammo.btSphereShape(1);
+                const mass = this.state.mass; // Use stored mass
+                const inertia = new Ammo.btVector3(10, 8, 5);
+                const startTransform = new Ammo.btTransform();
+                startTransform.setIdentity();
+                startTransform.setOrigin(new Ammo.btVector3(0, 0, params.r_earth + 400e3));
+                const motionState = new Ammo.btDefaultMotionState(startTransform);
+                const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, sphereShape, inertia);
+                const satBody = new Ammo.btRigidBody(rbInfo);
+                satBody.setLinearVelocity(new Ammo.btVector3(7676, 0, 0));
+                satBody.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
+                world.addRigidBody(satBody);
+                Ammo.destroy(inertia);
+                Ammo.destroy(startTransform);
+                Ammo.destroy(rbInfo);
 
                 try {
                     const satGltf = await new Promise((resolve, reject) => {
@@ -674,13 +690,13 @@
                 this.state.solar_pressure = params.solar_pressure;
                 this.state.c_light = params.c_light;
                 this.state.max_torque = params.max_torque;
-                this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale; // Update timeScale
+                this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale;
                 const qNorm = Math.sqrt(params.q_desired.w ** 2 + params.q_desired.x ** 2 + params.q_desired.y ** 2 + params.q_desired.z ** 2);
                 if (qNorm === 0) {
                     console.warn('Invalid quaternion (zero norm), using default [1, 0, 0, 0]');
-                    this.state.q_desired = new CANNON.Quaternion(1, 0, 0, 0);
+                    this.state.q_desired = new Ammo.btQuaternion(1, 0, 0, 0);
                 } else {
-                    this.state.q_desired = new CANNON.Quaternion(
+                    this.state.q_desired = new Ammo.btQuaternion(
                         params.q_desired.w / qNorm,
                         params.q_desired.x / qNorm,
                         params.q_desired.y / qNorm,
@@ -688,94 +704,290 @@
                     );
                 }
             },
+
             update: function(objects) {
                 if (!objects[0]) return;
                 const { body, mesh } = objects[0];
-                const r = body.position.clone(); // m
-                const v = body.velocity.clone(); // m/s
-                const rNorm = r.length(); // m
+                const transform = new Ammo.btTransform();
+                body.getMotionState().getWorldTransform(transform);
+                const r = transform.getOrigin();
+                const v = body.getLinearVelocity();
+                const epsilon = 1e-6;
+                const rNorm = Math.max(epsilon, Math.sqrt(r.x() * r.x() + r.y() * r.y() + r.z() * r.z()));
 
-                if (rNorm <= this.state.r_earth) {
-                    body.velocity.set(0, 0, 0);
+                if (rNorm <= this.state.r_earth || isNaN(rNorm)) {
+                    console.warn('Invalid rNorm, stopping simulation:', rNorm);
+                    body.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
+                    Ammo.destroy(transform);
                     return;
                 }
 
                 // Gravitational acceleration
-                const aGravity = r.scale(-this.state.mu / Math.pow(rNorm, 3)); // m/s²
+                const mu = isNaN(this.state.mu) || this.state.mu <= 0 ? 3.986e14 : this.state.mu;
+                const aGravity = new Ammo.btVector3(
+                    -mu * r.x() / Math.pow(rNorm, 3),
+                    -mu * r.y() / Math.pow(rNorm, 3),
+                    -mu * r.z() / Math.pow(rNorm, 3)
+                );
 
                 // Atmospheric drag
-                const alt = rNorm - this.state.r_earth; // m
+                const alt = rNorm - this.state.r_earth;
                 const rho = this.state.rho_0 * Math.exp(-alt / this.state.h_scale);
-                const dragAcc = v.scale(-0.5 * rho * 2.2 * 2.0 / 500 * v.length()); // m/s²
+                const vNorm = Math.sqrt(v.x() * v.x() + v.y() * v.y() + v.z() * v.z());
+                const dragAcc = new Ammo.btVector3(
+                    isNaN(rho) || isNaN(vNorm) ? 0 : -0.5 * rho * 2.2 * 2.0 / this.state.mass * vNorm * v.x(),
+                    isNaN(rho) || isNaN(vNorm) ? 0 : -0.5 * rho * 2.2 * 2.0 / this.state.mass * vNorm * v.y(),
+                    isNaN(rho) || isNaN(vNorm) ? 0 : -0.5 * rho * 2.2 * 2.0 / this.state.mass * vNorm * v.z()
+                );
 
                 // Solar pressure
-                const sunDir = new CANNON.Vec3(1.0, 0.0, 0.0);
-                const solarAcc = body.position.dot(sunDir) < 0
-                    ? new CANNON.Vec3(0, 0, 0)
-                    : sunDir.scale(this.state.solar_pressure * 2.0 * 1.5 / 500); // m/s²
+                const sunDir = new Ammo.btVector3(1.0, 0.0, 0.0);
+                const solarAcc = (r.x() * sunDir.x() + r.y() * sunDir.y() + r.z() * sunDir.z()) < 0
+                    ? new Ammo.btVector3(0, 0, 0)
+                    : new Ammo.btVector3(
+                        this.state.solar_pressure * 2.0 * 1.5 / this.state.mass * sunDir.x(),
+                        this.state.solar_pressure * 2.0 * 1.5 / this.state.mass * sunDir.y(),
+                        this.state.solar_pressure * 2.0 * 1.5 / this.state.mass * sunDir.z()
+                    );
 
                 // Total acceleration
-                const aTotal = aGravity.vadd(dragAcc).vadd(solarAcc);
-                utils.applyForce(body, aTotal, body.position);
-
-                // Attitude control
-                const q = body.quaternion.clone();
-                const qError = this.state.q_desired.mult(q.inverse());
-                const attErr = new CANNON.Vec3(
-                    qError.x * (qError.w >= 0 ? 1 : -1),
-                    qError.y * (qError.w >= 0 ? 1 : -1),
-                    qError.z * (qError.w >= 0 ? 1 : -1)
+                const aTotal = new Ammo.btVector3(
+                    aGravity.x() + dragAcc.x() + solarAcc.x(),
+                    aGravity.y() + dragAcc.y() + solarAcc.y(),
+                    aGravity.z() + dragAcc.z() + solarAcc.z()
                 );
-                this.state.integralError.vadd(attErr.scale(0.2 * this.state.timeScale), this.state.integralError); // Scale dt by timeScale
-                const iTerm = this.state.integralError.scale(this.state.ki);
-                const controlTorque = attErr
-                    .scale(-this.state.kp)
-                    .vsub(body.angularVelocity.scale(this.state.kd))
-                    .vsub(iTerm);
-                controlTorque.x = Math.max(-this.state.max_torque, Math.min(this.state.max_torque, controlTorque.x));
-                controlTorque.y = Math.max(-this.state.max_torque, Math.min(this.state.max_torque, controlTorque.y));
-                controlTorque.z = Math.max(-this.state.max_torque, Math.min(this.state.max_torque, controlTorque.z));
+
+                if (isNaN(aTotal.x()) || isNaN(aTotal.y()) || isNaN(aTotal.z())) {
+                    console.warn('NaN in aTotal, skipping force application:', aTotal.x(), aTotal.y(), aTotal.z());
+                    Ammo.destroy(transform);
+                    Ammo.destroy(aGravity);
+                    Ammo.destroy(dragAcc);
+                    Ammo.destroy(solarAcc);
+                    Ammo.destroy(aTotal);
+                    return;
+                }
+
+                const force = new Ammo.btVector3(
+                    aTotal.x() * this.state.mass,
+                    aTotal.y() * this.state.mass,
+                    aTotal.z() * this.state.mass
+                );
+                utils.applyForce(body, force);
+
+                // Attitude control using quaternion error
+                const q_current = body.getWorldTransform().getRotation(); // This is 'q' in your code
+                const q_current_conjugate = new Ammo.btQuaternion(q_current.x(), -q_current.y(), -q_current.z(), q_current.w()); // (x,y,z,-w) or (-x,-y,-z,w) depending on convention, but in context of error it's just flipping axis sign. Here I'll use the convention from Three.js which is (x,y,z,-w) to match the expected inverse for rotation. Wait no, for the standard error calculation it should be ( -x, -y, -z, w ) or just w,x,y,z where it is treated as scalar first and then vector parts.
+
+                // In quaternion algebra, q^-1 = q_conjugate / |q|^2. For unit quaternions, |q|^2 = 1.
+                // So, q_current_inverse is effectively q_current_conjugate.
+                // Ammo.js does not have a direct conjugate method, so you define it.
+                // A common way for error quaternion: q_error = q_desired * q_current_conjugate
+
+                // Let's assume you intended q_error = q_desired * q_current_conjugate
+                // Ensure this.state.q_desired is normalized before this step.
+                const qDesired = this.state.q_desired; // Already normalized if done correctly in init/updateParameters
+
+                // Create an Ammo.btQuaternion for the conjugate of the current rotation
+                const q_current_inv = new Ammo.btQuaternion(
+                    -q_current.x(), // Conjugate: negate vector parts
+                    -q_current.y(),
+                    -q_current.z(),
+                    q_current.w()
+                );
+
+                // Perform multiplication: qError = qDesired * q_current_inv
+                // Ammo.js quaternions don't have a direct multiplication method in the way Three.js does
+                // You would typically use `setA(q1) * setB(q2)` or manually apply the multiplication formula.
+
+                // To simplify, let's use Three.js for quaternion math and then convert back to Ammo.js
+                // This is often safer to ensure correct mathematical operations.
+                const three_q_current = new THREE.Quaternion(q_current.x(), q_current.y(), q_current.z(), q_current.w());
+                const three_q_desired = new THREE.Quaternion(this.state.q_desired.x(), this.state.q_desired.y(), this.state.q_desired.z(), this.state.q_desired.w());
+
+                // Error quaternion: what rotation takes q_current to q_desired? (q_desired * q_current.inverse())
+                const three_q_error = three_q_desired.multiply(three_q_current.invert()); // Or three_q_current.clone().invert().multiply(three_q_desired)
+                const qError = new Ammo.btQuaternion();
+                qError.setValue(three_q_error.x, three_q_error.y, three_q_error.z, three_q_error.w);
+
+                // Normalize qError
+                const qNorm = Math.sqrt(qError.w() * qError.w() + qError.x() * qError.x() + qError.y() * qError.y() + qError.z() * qError.z());
+                if (qNorm < 1e-6 || isNaN(qNorm)) {
+                    console.warn('Invalid qError norm, resetting:', qNorm);
+                    qError.setValue(1, 0, 0, 0);
+                } else {
+                    qError.setValue(
+                        qError.w() / qNorm,
+                        qError.x() / qNorm,
+                        qError.y() / qNorm,
+                        qError.z() / qNorm
+                    );
+                }
+
+                // Extract attitude error (vector part of quaternion error)
+                const attErr = new Ammo.btVector3(qError.x(), qError.y(), qError.z());
+                const attErrNorm = Math.sqrt(attErr.x() * attErr.x() + attErr.y() * attErr.y() + attErr.z() * attErr.z());
+                const scalarPart = qError.w();
+
+                // Shortest path correction (negate error if scalar part is negative)
+                const sign = scalarPart >= 0 ? 1 : -1;
+                const attErrScaled = new Ammo.btVector3(
+                    attErr.x() * sign * 2, // Scale by 2 for error angle approximation
+                    attErr.y() * sign * 2,
+                    attErr.z() * sign * 2
+                );
+
+                // Integral term with anti-windup
+                const maxIntegral = 10;
+                const deltaTime = simulationConfig.defaultUpdateInterval * this.state.timeScale;
+                this.state.integralError.setValue(
+                    Math.max(-maxIntegral, Math.min(maxIntegral, this.state.integralError.x() + attErrScaled.x() * deltaTime)),
+                    Math.max(-maxIntegral, Math.min(maxIntegral, this.state.integralError.y() + attErrScaled.y() * deltaTime)),
+                    Math.max(-maxIntegral, Math.min(maxIntegral, this.state.integralError.z() + attErrScaled.z() * deltaTime))
+                );
+
+                if (isNaN(this.state.integralError.x()) || isNaN(this.state.integralError.y()) || isNaN(this.state.integralError.z())) {
+                    console.warn('NaN in integralError, resetting');
+                    this.state.integralError.setValue(0, 0, 0);
+                }
+
+                // PID control torque
+                const angularVelocity = body.getAngularVelocity();
+                const controlTorque = new Ammo.btVector3(
+                    -this.state.kp * attErrScaled.x() - this.state.kd * angularVelocity.x() - this.state.ki * this.state.integralError.x(),
+                    -this.state.kp * attErrScaled.y() - this.state.kd * angularVelocity.y() - this.state.ki * this.state.integralError.y(),
+                    -this.state.kp * attErrScaled.z() - this.state.kd * angularVelocity.z() - this.state.ki * this.state.integralError.z()
+                );
 
                 // Gravity gradient torque
-                const rHat = r.unit();
-                const I_times_rHat = new CANNON.Vec3();
-                this.state.I.vmult(rHat, I_times_rHat);
-                const ggTorque = rHat.cross(I_times_rHat);
-                ggTorque.scale(3 * this.state.mu / Math.pow(rNorm, 3), ggTorque);
+                const rHat = new Ammo.btVector3(r.x() / rNorm, r.y() / rNorm, r.z() / rNorm);
+                const I_times_rHat = new Ammo.btVector3(
+                    this.state.I.x() * rHat.x(),
+                    this.state.I.y() * rHat.y(),
+                    this.state.I.z() * rHat.z()
+                );
+                const ggTorque = new Ammo.btVector3(
+                    rHat.y() * I_times_rHat.z() - rHat.z() * I_times_rHat.y(),
+                    rHat.z() * I_times_rHat.x() - rHat.x() * I_times_rHat.z(),
+                    rHat.x() * I_times_rHat.y() - rHat.y() * I_times_rHat.x()
+                );
+                const scaleFactor = Math.min(1e10, 3 * mu / Math.pow(rNorm, 3));
+                ggTorque.setValue(
+                    ggTorque.x() * scaleFactor,
+                    ggTorque.y() * scaleFactor,
+                    ggTorque.z() * scaleFactor
+                );
 
-                const totalTorque = controlTorque.vadd(ggTorque);
-                body.torque.vadd(totalTorque, body.torque);
-                this.state.currentTime += (1 / 60) * this.state.timeScale; // Scale time increment
+                if (isNaN(ggTorque.x()) || isNaN(ggTorque.y()) || isNaN(ggTorque.z())) {
+                    console.warn('NaN in ggTorque, skipping torque application:', ggTorque.x(), ggTorque.y(), ggTorque.z());
+                    Ammo.destroy(transform);
+                    Ammo.destroy(aGravity);
+                    Ammo.destroy(dragAcc);
+                    Ammo.destroy(solarAcc);
+                    Ammo.destroy(aTotal);
+                    Ammo.destroy(force);
+                    Ammo.destroy(qError);
+                    Ammo.destroy(qDesiredConjugate);
+                    Ammo.destroy(attErr);
+                    Ammo.destroy(attErrScaled);
+                    Ammo.destroy(controlTorque);
+                    Ammo.destroy(rHat);
+                    Ammo.destroy(I_times_rHat);
+                    Ammo.destroy(ggTorque);
+                    return;
+                }
+
+                // Combine torques and enforce max torque limit
+                const totalTorque = new Ammo.btVector3(
+                    controlTorque.x() + ggTorque.x(),
+                    controlTorque.y() + ggTorque.y(),
+                    controlTorque.z() + ggTorque.z()
+                );
+                const torqueNorm = Math.sqrt(totalTorque.x() * totalTorque.x() + totalTorque.y() * totalTorque.y() + totalTorque.z() * totalTorque.z());
+                if (torqueNorm > this.state.max_torque) {
+                    const scale = this.state.max_torque / torqueNorm;
+                    totalTorque.setValue(
+                        totalTorque.x() * scale,
+                        totalTorque.y() * scale,
+                        totalTorque.z() * scale
+                    );
+                }
+
+                if (isNaN(totalTorque.x()) || isNaN(totalTorque.y()) || isNaN(totalTorque.z())) {
+                    console.warn('NaN in totalTorque, skipping torque application:', totalTorque.x(), totalTorque.y(), totalTorque.z());
+                    Ammo.destroy(transform);
+                    Ammo.destroy(aGravity);
+                    Ammo.destroy(dragAcc);
+                    Ammo.destroy(solarAcc);
+                    Ammo.destroy(aTotal);
+                    Ammo.destroy(force);
+                    Ammo.destroy(qError);
+                    Ammo.destroy(q_current_conjugate);
+                    Ammo.destroy(q_current);
+                    Ammo.destroy(q_current_inv);
+                    Ammo.destroy(attErr);
+                    Ammo.destroy(attErrScaled);
+                    Ammo.destroy(controlTorque);
+                    Ammo.destroy(rHat);
+                    Ammo.destroy(I_times_rHat);
+                    Ammo.destroy(ggTorque);
+                    Ammo.destroy(totalTorque);
+                    return;
+                }
+
+                utils.applyTorque(body, totalTorque);
+                this.state.currentTime += simulationConfig.defaultUpdateInterval * this.state.timeScale;
+
+                // Clean up
+                Ammo.destroy(transform);
+                Ammo.destroy(aGravity);
+                Ammo.destroy(dragAcc);
+                Ammo.destroy(solarAcc);
+                Ammo.destroy(aTotal);
+                Ammo.destroy(force);
+                Ammo.destroy(qError);
+                Ammo.destroy(q_current_conjugate);
+                Ammo.destroy(attErr);
+                Ammo.destroy(attErrScaled);
+                Ammo.destroy(controlTorque);
+                Ammo.destroy(rHat);
+                Ammo.destroy(I_times_rHat);
+                Ammo.destroy(ggTorque);
+                Ammo.destroy(totalTorque);
             },
             getTelemetry: function(objects) {
                 if (!objects[0]) return {};
                 const { body } = objects[0];
-                const r = body.position.clone();
-                const v = body.velocity.clone();
-                const rMag = r.length(); // m
-                const theta = Math.acos(r.z / r.length());
-                const phi = Math.atan2(r.y, r.x);
-                const vR = v.dot(r.unit());
-                const vT = Math.sqrt(v.lengthSquared() - vR * vR);
-                return {
+                const transform = new Ammo.btTransform();
+                body.getMotionState().getWorldTransform(transform);
+                const r = transform.getOrigin();
+                const v = body.getLinearVelocity();
+                const rMag = Math.sqrt(r.x() * r.x() + r.y() * r.y() + r.z() * r.z());
+                const theta = Math.acos(r.z() / rMag);
+                const phi = Math.atan2(r.y(), r.x());
+                const vR = v.x() * (r.x() / rMag) + v.y() * (r.y() / rMag) + v.z() * (r.z() / rMag);
+                const vT = Math.sqrt(v.x() * v.x() + v.y() * v.y() + v.z() * v.z() - vR * vR);
+                const q = transform.getRotation();
+                const telemetry = {
                     'Time': { value: this.state.currentTime.toFixed(1), unit: 's' },
-                    'Simulation Speed': { value: this.state.timeScale.toFixed(2), unit: 'x' }, // New telemetry
+                    'Simulation Speed': { value: this.state.timeScale.toFixed(2), unit: 'x' },
                     'Radius': { value: rMag.toFixed(2), unit: 'm' },
                     'Latitude': { value: (90 - (theta * 180 / Math.PI)).toFixed(2), unit: 'deg' },
                     'Longitude': { value: (phi * 180 / Math.PI).toFixed(2), unit: 'deg' },
                     'Radial Velocity': { value: vR.toFixed(2), unit: 'm/s' },
                     'Tangential Velocity': { value: vT.toFixed(2), unit: 'm/s' },
-                    'Azimuth': { value: (Math.atan2(r.y, r.x) * 180 / Math.PI).toFixed(2), unit: 'deg' },
-                    'Quaternion': { value: [body.quaternion.w, body.quaternion.x, body.quaternion.y, body.quaternion.z], unit: '' },
-                    'Position': { value: [r.x, r.y, r.z], unit: 'm' }
+                    'Azimuth': { value: (Math.atan2(r.y(), r.x()) * 180 / Math.PI).toFixed(2), unit: 'deg' },
+                    'Quaternion': { value: [q.w(), q.x(), q.y(), q.z()], unit: '' },
+                    'Position': { value: [r.x(), r.y(), r.z()], unit: 'm' }
                 };
+                Ammo.destroy(transform);
+                return telemetry;
             }
             }),
             debrisField: new Simulation('debrisField', {
                 name: 'Debris Field',
                 cameraControl: 'orbit',
                 parameters: [
-                    { id: 'timeScale', label: 'Simulation Speed', type: 'scalar', control: 'slider', min: 0.1, max: 100, step: 0.1, defaultValue: 1.0 }, // New parameter
+                    { id: 'timeScale', label: 'Simulation Speed', type: 'scalar', control: 'slider', min: 0.1, max: 100, step: 0.1, defaultValue: 1.0 },
                     { id: 'debrisCount', label: 'Debris Count', type: 'scalar', defaultValue: 200 },
                     { 
                         id: 'fieldSize', 
@@ -790,14 +1002,14 @@
                     }
                 ],
                 telemetry: [
-                    { id: 'Time', type: 'scalar' }, // New telemetry
-                    { id: 'Simulation Speed', type: 'scalar' }, // New telemetry
+                    { id: 'Time', type: 'scalar' },
+                    { id: 'Simulation Speed', type: 'scalar' },
                     { id: 'Debris Count', type: 'scalar' },
                     { id: 'Collisions', type: 'scalar' }
                 ],
-                init: async function(params) { // Made async for consistency
-                    world.gravity.set(0, 0, 0);
-                    this.state = { // Store state
+                init: async function(params) {
+                    world.setGravity(new Ammo.btVector3(0, 0, 0));
+                    this.state = {
                         collisions: 0,
                         currentTime: 0.0,
                         timeScale: params.timeScale || simulationConfig.defaultTimeScale
@@ -811,19 +1023,28 @@
                     // Create debris objects
                     for (let i = 0; i < params.debrisCount; i++) {
                         const size = Math.random() * 20 + 5;
-                        const body = new CANNON.Body({ mass: size, shape: new CANNON.Sphere(size) });
-                        body.position.set(
+                        const sphereShape = new Ammo.btSphereShape(size);
+                        const mass = size;
+                        const inertia = new Ammo.btVector3(0, 0, 0);
+                        sphereShape.calculateLocalInertia(mass, inertia);
+                        const startTransform = new Ammo.btTransform();
+                        startTransform.setIdentity();
+                        startTransform.setOrigin(new Ammo.btVector3(
                             (Math.random() - 0.5) * params.fieldSize.width,
                             (Math.random() - 0.5) * params.fieldSize.height,
                             (Math.random() - 0.5) * params.fieldSize.depth
-                        );
-                        body.velocity.set(
+                        ));
+                        const motionState = new Ammo.btDefaultMotionState(startTransform);
+                        const rbInfo = new Ammo.btRigidBodyConstructionInfo(mass, motionState, sphereShape, inertia);
+                        const body = new Ammo.btRigidBody(rbInfo);
+                        body.setLinearVelocity(new Ammo.btVector3(
                             (Math.random() - 0.5) * 200,
                             (Math.random() - 0.5) * 200,
                             (Math.random() - 0.5) * 200
-                        );
-                        body.addEventListener('collide', () => this.state.collisions++);
-                        world.addBody(body);
+                        ));
+                        body.setCcdMotionThreshold(0.1); // Enable CCD for high-speed objects
+                        body.setCcdSweptSphereRadius(size * 0.5);
+                        world.addRigidBody(body);
                         const mesh = new THREE.Mesh(
                             new THREE.SphereGeometry(size),
                             new THREE.MeshStandardMaterial({ 
@@ -834,7 +1055,16 @@
                         );
                         scene.add(mesh);
                         createdObjects.push({ mesh, body });
+                        Ammo.destroy(inertia);
+                        Ammo.destroy(startTransform);
+                        Ammo.destroy(rbInfo);
                     }
+
+                    // Collision detection setup
+                    world.setContactAddedCallback((cp, colObj0, colObj1) => {
+                        this.state.collisions++;
+                    });
+
                     createStarfield();
                     const axesHelper = new THREE.AxesHelper(params.fieldSize.width * 0.5);
                     scene.add(axesHelper);
@@ -842,10 +1072,10 @@
                     return createdObjects;
                 },
                 updateParameters: function(params) {
-                    this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale; // Update timeScale
+                    this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale;
                 },
                 update: function(objects) {
-                    this.state.currentTime += (1 / 60) * this.state.timeScale; // Scale time increment
+                    this.state.currentTime += (simulationConfig.defaultUpdateInterval) * this.state.timeScale;
                 },
                 getTelemetry: function(objects) {
                     return {
@@ -874,9 +1104,16 @@
             const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
             dirLight.position.set(5, 10, 7.5);
             scene.add(dirLight);
-            world = new CANNON.World();
-            world.solver.iterations = 20;
-            world.solver.tolerance = 0.0001;
+
+            // Initialize Ammo.js physics world
+            const collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+            const dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
+            const broadphase = new Ammo.btDbvtBroadphase();
+            const solver = new Ammo.btSequentialImpulseConstraintSolver();
+            world = new Ammo.btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfiguration);
+            world.getSolverInfo().set_m_numIterations(60);
+            //world.getSolverInfo().set_m_solverMode(Ammo.SOLVER_USE_WARMSTARTING | Ammo.SOLVER_SIMD);
+
             chart = new Chart(document.getElementById('telemetry-chart').getContext('2d'), {
                 type: 'line',
                 data: {
@@ -1025,7 +1262,6 @@
         function onWindowResize() {
             if (!renderer || !camera) return;
             const container = document.getElementById('simulation-container');
-            const telemetryColumn = document.getElementById('telemetry-column');
             
             setTimeout(() => {
                 const width = container.clientWidth;
@@ -1133,7 +1369,9 @@
                     scene.remove(o.mesh);
                     utils.disposeObject(o.mesh);
                 }
-                world.removeBody(o.body);
+                world.removeRigidBody(o.body);
+                Ammo.destroy(o.body.getMotionState());
+                Ammo.destroy(o.body);
             });
             objectsToUpdate = [];
 
@@ -1146,16 +1384,6 @@
             scene.background = null;
             renderer.clear();
 
-            // Clear physics world bodies
-            world.bodies.forEach(body => world.removeBody(body));
-
-            // Reinitialize essential scene elements
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            dirLight.position.set(5, 10, 7.5);
-            scene.add(dirLight);
-
-            // Clean up simulation state
             if (activeSimulation?.state) {
                 if (activeSimulation.state.earthModel) {
                     utils.disposeObject(activeSimulation.state.earthModel);
@@ -1171,6 +1399,10 @@
             }
 
             inputManager.cleanup();
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(5, 10, 7.5);
+            scene.add(dirLight);
         }
 
         /////////// Handle Mouse ////////
@@ -1571,10 +1803,10 @@
                 return;
             }
             let deltaTime = clock.getDelta();
-            if (deltaTime > 0.1) deltaTime = 1 / 60;
+            if (deltaTime > 0.1) deltaTime = simulationConfig.defaultUpdateInterval;
             const timeScale = activeSimulation.state.timeScale || simulationConfig.defaultTimeScale;
             if (simulationRunning) {
-                world.step(simulationConfig.defaultUpdateInterval * timeScale, deltaTime * timeScale, 3);
+                world.stepSimulation(deltaTime * timeScale, 3, simulationConfig.defaultUpdateInterval * timeScale);
                 activeSimulation.update(objectsToUpdate);
                 inputManager.update(activeSimulation.id);
             }
@@ -1582,14 +1814,24 @@
             objectsToUpdate.forEach(o => {
                 if (o.mesh.isInstancedMesh) {
                     const matrix = new THREE.Matrix4();
-                    matrix.setPosition(o.body.position);
-                    matrix.makeRotationFromQuaternion(new THREE.Quaternion(o.body.quaternion.x, o.body.quaternion.y, o.body.quaternion.z, o.body.quaternion.w));
-                    matrix.scale(new THREE.Vector3(o.body.shape.radius || 1, o.body.shape.radius || 1, o.body.shape.radius || 1));
+                    const transform = new Ammo.btTransform();
+                    o.body.getMotionState().getWorldTransform(transform);
+                    const pos = transform.getOrigin();
+                    const quat = transform.getRotation();
+                    matrix.setPosition(pos.x(), pos.y(), pos.z());
+                    matrix.makeRotationFromQuaternion(new THREE.Quaternion(quat.x(), quat.y(), quat.z(), quat.w()));
+                    matrix.scale(new THREE.Vector3(o.body.getCollisionShape().getRadius() || 1, o.body.getCollisionShape().getRadius() || 1, o.body.getCollisionShape().getRadius() || 1));
                     o.mesh.setMatrixAt(o.instanceId, matrix);
                     o.mesh.instanceMatrix.needsUpdate = true;
+                    Ammo.destroy(transform);
                 } else {
-                    o.mesh.position.copy(o.body.position);
-                    o.mesh.quaternion.copy(o.body.quaternion);
+                    const transform = new Ammo.btTransform();
+                    o.body.getMotionState().getWorldTransform(transform);
+                    const pos = transform.getOrigin();
+                    const quat = transform.getRotation();
+                    o.mesh.position.set(pos.x(), pos.y(), pos.z());
+                    o.mesh.quaternion.set(quat.x(), quat.y(), quat.z(), quat.w());
+                    Ammo.destroy(transform);
                 }
             });
             if (simulationRunning) {
@@ -1597,10 +1839,11 @@
             }
             if (orbitControls) orbitControls.update();
             camera.lookAt(objectsToUpdate[0]?.cameraTarget || new THREE.Vector3(0, 0, 0));
-            starfield.rotation.y += 0.0001 * timeScale; // Scale starfield rotation
+            starfield.rotation.y += 0.0001 * timeScale;
             if (renderer && camera) renderer.render(scene, camera);
         }
         init();
-    </script>
+    });
+</script>
 </body>
 </html>
