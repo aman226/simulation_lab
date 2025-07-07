@@ -10,7 +10,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
-    <!-- Replace Cannon.js with Ammo.js -->
     <script src=./builds/ammo.js></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -289,7 +288,7 @@
             </div>
             <div class="mt-auto text-xs text-gray-500 text-center pt-4">
                 <p>Orbit: LMB+drag, Zoom: Scroll, Pan: RMB+drag</p>
-                <p>© 2025 AeroLab Project</p>
+                <p>© 2025 SimLab Project</p>
             </div>
         </div>
         <div id="standby-panel" class="flex-grow flex items-center justify-center text-gray-600">
@@ -559,7 +558,7 @@
                 { id: 'q_desired', label: 'Desired Quaternion', type: 'vector4d', defaultValue: { w: 1.0, x: 0.0, y: 0.0, z: 0.0 } },
                 { id: 'mu', label: 'Gravitational Parameter', units: 'm³/s²', type: 'scalar', defaultValue: 3.986e14 },
                 { id: 'r_earth', label: 'Earth Radius', units: 'm', type: 'scalar', defaultValue: 6371e3 },
-                { id: 'rho_0', label: 'Reference Density', units: 'kg/m³', type: 'scalar', min: 0, max: 1e-9, step: 0.01e-9, defaultValue: 0 },
+                { id: 'rho_0', label: 'Reference Density', units: 'kg/m³', type: 'scalar',control: 'slider', min: 0, max: 1e-9, step: 0.01e-9, defaultValue: 0 },
                 { id: 'h_scale', label: 'Scale Height', units: 'm', type: 'scalar', defaultValue: 100e3 },
                 { id: 'solar_pressure', label: 'Solar Pressure', units: 'N/m²', type: 'scalar', min: 0, max: 6e-6, step: 0.01e-6, defaultValue: 0 },
                 { id: 'c_light', label: 'Speed of Light', units: 'm/s', type: 'scalar', defaultValue: 3e8 },
@@ -1544,6 +1543,17 @@
             if (quickAccessParams.length > 0) {
                 quickPanel.innerHTML = `<h2 class="text-base sm:text-lg font-semibold text-blue-300 mb-3 border-b border-blue-400/50 pb-2 flex items-center"><i data-lucide="sliders" class="h-4 w-4 mr-2"></i>Quick Parameters</h2>`;
             }
+            // Helper function to format small numbers
+            const formatNumber = (value, min, max, step) => {
+                if (min !== undefined && max !== undefined && (max - min) < 0.01) {
+                    // Use scientific notation for small ranges
+                    return Number(value).toExponential(2);
+                } else if (step && step < 0.001) {
+                    // Use more decimal places for small steps
+                    return Number(value).toFixed(6);
+                }
+                return Number(value).toFixed(2);
+            };
 
             activeSimulation.parameters.forEach(p => {
                 const value = paramSource[p.id];
@@ -1566,10 +1576,10 @@
                         const ids = p.ids || (p.type === 'vector4d' ? ['w', 'x', 'y', 'z'] : ['x', 'y', 'z']);
                         quickPanel.innerHTML += `<div><label class="block text-sm font-medium text-gray-300 mb-1" data-tooltip="${label}">${label}</label></div>`;
                         ids.forEach((axis, index) => {
-                            quickPanel.innerHTML += `<div class="pl-4"><label class="block text-xs font-medium text-gray-400">${axis.toUpperCase()}</label><div class="flex items-center space-x-3 mt-1"><input data-param-id="${p.id}" data-axis="${axis}" type="range" min="${p.min?.[axis] ?? -Infinity}" max="${p.max?.[axis] ?? Infinity}" step="${p.step?.[axis] ?? 0.1}" value="${value[axis]}" class="param-input quick-input"><span id="${p.id}-${axis}-value" class="text-sm text-blue-300 w-20 text-right font-mono">${value[axis].toFixed(2)}</span></div></div>`;
+                            quickPanel.innerHTML += `<div class="pl-4"><label class="block text-xs font-medium text-gray-400">${axis.toUpperCase()}</label><div class="flex items-center space-x-3 mt-1"><input data-param-id="${p.id}" data-axis="${axis}" type="range" min="${p.min?.[axis] ?? -Infinity}" max="${p.max?.[axis] ?? Infinity}" step="${p.step?.[axis] ?? 0.1}" value="${value[axis]}" class="param-input quick-input"><span id="${p.id}-${axis}-value" class="text-sm text-blue-300 w-20 text-right font-mono">${formatNumber(value[axis], p.min?.[axis], p.max?.[axis], p.step?.[axis])}</span></div></div>`;
                         });
                     } else {
-                        quickPanel.innerHTML += `<div><label class="block text-sm font-medium text-gray-300 mb-1" data-tooltip="${label}">${label}</label><div class="flex items-center space-x-3 mt-1"><input data-param-id="${p.id}" type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${value}" class="param-input quick-input"><span id="${p.id}-value" class="text-sm text-blue-300 w-20 text-right font-mono">${value.toFixed(2)}</span></div></div>`;
+                        quickPanel.innerHTML += `<div><label class="block text-sm font-medium text-gray-300 mb-1" data-tooltip="${label}">${label}</label><div class="flex items-center space-x-3 mt-1"><input data-param-id="${p.id}" type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${value}" class="param-input quick-input"><span id="${p.id}-value" class="text-sm text-blue-300 w-20 text-right font-mono">${formatNumber(value, p.min, p.max, p.step)}</span></div></div>`;
                     }
                 }
             });
@@ -1593,16 +1603,27 @@
         }
 
         function handleParameterChange(e) {
+                        // Helper function to format small numbers
+            const formatNumber = (value, min, max, step) => {
+                if (min !== undefined && max !== undefined && (max - min) < 0.01) {
+                    // Use scientific notation for small ranges
+                    return Number(value).toExponential(2);
+                } else if (step && step < 0.001) {
+                    // Use more decimal places for small steps
+                    return Number(value).toFixed(6);
+                }
+                return Number(value).toFixed(2);
+            };
             const { paramId, axis } = e.target.dataset;
             const paramDef = activeSimulation.parameters.find(p => p.id === paramId);
             let value = utils.validateNumber(e.target.value, paramDef.min?.[axis] ?? paramDef.min, paramDef.max?.[axis] ?? paramDef.max);
             if (value === false) return;
             if (paramDef.type === 'vector3d' || paramDef.type === 'vector4d') {
                 currentParameters[paramId][axis] = value;
-                document.getElementById(`${paramId}-${axis}-value`).textContent = value.toFixed(2);
+                document.getElementById(`${paramId}-${axis}-value`).textContent = formatNumber(value, paramDef.min?.[axis], paramDef.max?.[axis], paramDef.step?.[axis]);
             } else {
                 currentParameters[paramId] = value;
-                document.getElementById(`${paramId}-value`).textContent = value.toFixed(2);
+                document.getElementById(`${paramId}-value`).textContent = formatNumber(value, paramDef.min, paramDef.max, paramDef.step);
             }
             activeSimulation.updateParameters(currentParameters);
         }
