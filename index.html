@@ -2066,6 +2066,7 @@
 
         function stopSimulation() {
             simulationRunning = false;
+            camera = new THREE.PerspectiveCamera(simulationConfig.defaultCamera.fov, simContainer.clientWidth / simContainer.clientHeight, simulationConfig.defaultCamera.near, simulationConfig.defaultCamera.far);
             document.getElementById('stop-btn').classList.add('btn-active');
             document.getElementById('start-btn').classList.remove('btn-active');
             clock.stop();
