@@ -4,16 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OrbitingIdeas SimLab</title>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/loaders/GLTFLoader.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.138.3/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
-    <script src=./builds/ammo.js></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="./style.css">
+    
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="./fonts/montserrat.css">
+    <link rel="stylesheet" href="./fonts/spacemono.css">
+    <link rel="stylesheet" href="./css/style.css">
+
+    <!-- Local Scripts -->
+    <script src="./libs/three.min.js"></script>
+    <script src="./libs/GLTFLoader.js"></script>
+    <script src="./libs/OrbitControls.js"></script>
+    <script src="./libs/ammo.js"></script>
+    <script src="./libs/chart.min.js"></script>
+    <script src="./libs/lucide.min.js"></script>
+    <script src="./libs/tailwind.js"></script>
 <style>
     body {
         font-family: 'Space Mono', monospace;
@@ -257,7 +261,7 @@
         </div>
     </header>
     <audio id="background-audio" autoplay loop muted>
-        <source src="./space_music.mp3" type="audio/mpeg">
+        <source src="./assets/space_music.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
     
@@ -1089,8 +1093,430 @@
                     near: 0.1,
                     far: 100000
                 }
+            }),
+            wedgeShockSim: new Simulation('wedgeShockSim', {
+                name: '2D Wedge Shock Simulator',
+                cameraControl: 'none',
+                parameters: [
+                    { id: 'mach', label: 'Incoming Mach Number', type: 'scalar', control: 'slider', min: 1.5, max: 10, step: 0.1, defaultValue: 2.0 },
+                    { id: 'wedgeAngle', label: 'Wedge Angle', units: 'deg', type: 'scalar', control: 'slider', min: 5, max: 45, step: 0.1, defaultValue: 10.0 },
+                    { id: 'P1', label: 'Upstream Pressure', units: 'Pa', type: 'scalar', control: 'slider', min: 1000, max: 100000, step: 100, defaultValue: 10000 },
+                    { id: 'rho1', label: 'Upstream Density', units: 'kg/m³', type: 'scalar', control: 'slider', min: 0.01, max: 2.0, step: 0.01, defaultValue: 0.1 },
+                    { id: 'T1', label: 'Upstream Temperature', units: 'K', type: 'scalar', control: 'slider', min: 200, max: 400, step: 1, defaultValue: 300 },
+                    { id: 'gamma', label: 'Specific Heat Ratio', type: 'scalar', control: 'slider', min: 1.1, max: 1.67, step: 0.01, defaultValue: 1.4 },
+                    { id: 'timeScale', label: 'Simulation Speed', type: 'scalar', control: 'slider', min: 0.1, max: 10, step: 0.1, defaultValue: 1.0 }
+                ],
+                telemetry: [
+                    { id: 'Time', type: 'scalar' },
+                    { id: 'Simulation Speed', type: 'scalar' },
+                    { id: 'Shock Angle', type: 'scalar' },
+                    { id: 'Downstream Mach', type: 'scalar' },
+                    { id: 'Downstream Pressure', type: 'scalar' },
+                    { id: 'Downstream Density', type: 'scalar' },
+                    { id: 'Downstream Temperature', type: 'scalar' },
+                    { id: 'Pressure Ratio', type: 'scalar' },
+                    { id: 'Density Ratio', type: 'scalar' },
+                    { id: 'Temperature Ratio', type: 'scalar' }
+                ],
+                userControls: null,
+                cameraSettings: { position: new THREE.Vector3(0, 0, 100), near: 0.1, far: 1000 },
+                init: async function(params) {
+                    const canvasElement = simulationConfig.canvas || document.querySelector('canvas');
+                    if (!canvasElement) {
+                        throw new Error('Canvas element not found');
+                    }
+
+                    world.setGravity(new Ammo.btVector3(0, 0, 0));
+                    this.state = {
+                        currentTime: 0.0,
+                        timeScale: params.timeScale || simulationConfig.defaultTimeScale,
+                        wedgeMesh: null,
+                        shockLine: null,
+                        inflowParticles: null,
+                        outflowParticles: null,
+                        shockAngle: 0,
+                        downstreamMach: 0,
+                        densityRatio: 1.0
+                    };
+
+                    const aspect = canvasElement.clientWidth / canvasElement.clientHeight;
+                    const viewWidth = 50;
+                    const viewHeight = 50;
+
+                    camera = new THREE.OrthographicCamera(
+                        -25,               // left
+                        viewWidth,       // right
+                        viewHeight,      // top
+                        0,               // bottom
+                        -1000,           // near
+                        1000             // far
+                    );
+                    camera.position.set(0, 0, 100); // Slight z-offset to view 2D
+                    camera.lookAt(0, 0, 0);
+                    camera.updateProjectionMatrix();
+
+                    const wedgeGeometry = new THREE.BufferGeometry();
+                    const wedgeVertices = new Float32Array([
+                        0, 0, 0,
+                        50, 0, 0,
+                        50, 50 * Math.tan(params.wedgeAngle * Math.PI / 180), 0
+                    ]);
+                    wedgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(wedgeVertices, 3));
+                    const wedgeMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
+                    this.state.wedgeMesh = new THREE.Mesh(wedgeGeometry, wedgeMaterial);
+                    scene.add(this.state.wedgeMesh);
+
+                    const shockGeometry = new THREE.BufferGeometry();
+                    shockGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+                    const shockMaterial = new THREE.LineBasicMaterial({ color: 0x00beff });
+                    this.state.shockLine = new THREE.Line(shockGeometry, shockMaterial);
+                    scene.add(this.state.shockLine);
+
+                    const particleCanvas1 = document.createElement('canvas');
+                    particleCanvas1.width =128;
+                    particleCanvas1.height = 128;
+                    const ctx1 = particleCanvas1.getContext('2d');
+                    ctx1.beginPath();
+                    ctx1.arc(64,64, 127, 0, Math.PI * 2);
+                    ctx1.fillStyle = '#00beff';
+                    ctx1.fill();
+                    const inflowTexture = new THREE.CanvasTexture(particleCanvas1);
+
+
+                    // Calculate initial density ratio
+                    const tempShockAngle = solveShockAngle(params.mach, params.wedgeAngle, params.gamma);
+                    this.state.shockAngle = tempShockAngle;
+                    const betaRad = tempShockAngle * Math.PI / 180;
+                    const Mn1 = params.mach * Math.sin(betaRad);
+                    const densityRatio = ((params.gamma + 1) * Mn1 ** 2) / ((params.gamma - 1) * Mn1 ** 2 + 2);
+                    this.state.densityRatio = densityRatio;
+
+                    const shockLength = 65;
+                    const shockVertices = new Float32Array([
+                        25, 0, 0,
+                        25 + shockLength * Math.cos(betaRad), shockLength * Math.sin(betaRad), 0
+                    ]);
+                    this.state.shockLine.geometry.setAttribute('position', new THREE.Float32BufferAttribute(shockVertices, 3));
+                    this.state.shockLine.geometry.attributes.position.needsUpdate = true;
+
+
+                    const baseParticleCount = 200;
+                    const inflowCount = baseParticleCount;
+                    const outflowCount = Math.round(baseParticleCount * densityRatio * 2);
+
+                    const inflowGeometry = new THREE.BufferGeometry();
+                    const inflowPositions = new Float32Array(inflowCount * 3);
+                    for (let i = 0; i < inflowCount; i++) {
+                        inflowPositions[i * 3] = Math.random() * 75; // x: [-25, 0]
+                        
+                        const shockY = (inflowPositions[i * 3] - 25) * Math.tan(betaRad);
+                        const wedgeY = (inflowPositions[i * 3] - 25) * Math.tan(params.wedgeAngle * Math.PI / 180);
+
+                        if ( inflowPositions[i * 3] >= 25) 
+                                inflowPositions[i * 3 + 1] = (inflowPositions[i * 3]-25) * Math.tan(betaRad) +  Math.random() * 50;
+                        else 
+                                inflowPositions[i * 3 + 1] = Math.random() * 50;
+                        inflowPositions[i * 3 + 2] = 0;
+                    }
+                    inflowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(inflowPositions, 3));
+                    const inflowMaterial = new THREE.PointsMaterial({ size: 1, map: inflowTexture, transparent: true});
+                    this.state.inflowParticles = new THREE.Points(inflowGeometry, inflowMaterial);
+                    scene.add(this.state.inflowParticles);
+
+                    const particleCanvas2 = document.createElement('canvas');
+                    particleCanvas2.width = 128;
+                    particleCanvas2.height = 128;
+                    const ctx2 = particleCanvas2.getContext('2d');
+                    ctx2.beginPath();
+                    ctx2.arc(64,64,127, 0, Math.PI * 2);
+                    ctx2.fillStyle = '#00beff';
+                    ctx2.fill();
+                    const outflowTexture = new THREE.CanvasTexture(particleCanvas2);
+
+                    const outflowGeometry = new THREE.BufferGeometry();
+                    const outflowPositions = new Float32Array(outflowCount * 3);
+                    for (let i = 0; i < outflowCount; i++) {
+                        const x = Math.random() * 50; // x: [25, 50]
+                        outflowPositions[i * 3] = x;
+                        outflowPositions[i * 3 + 1] = Math.random() * ( (x - 25) * Math.tan(tempShockAngle * Math.PI / 180) - (x - 25) * Math.tan(params.wedgeAngle * Math.PI / 180) ) + (x - 25) * Math.tan(params.wedgeAngle * Math.PI / 180); // y: [(x-25)*tan(beta), (x-25)*tan(theta)]
+                        outflowPositions[i * 3 + 2] = 0;
+                    }
+                    outflowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(outflowPositions, 3));
+                    const outflowMaterial = new THREE.PointsMaterial({ size: 1, map: outflowTexture, transparent: true });
+                    this.state.outflowParticles = new THREE.Points(outflowGeometry, outflowMaterial);
+                    scene.add(this.state.outflowParticles);
+
+                    const wedgeShape = new Ammo.btBoxShape(new Ammo.btVector3(25, 25 * Math.tan(params.wedgeAngle * Math.PI / 180), 0.1));
+                    const startTransform = new Ammo.btTransform();
+                    startTransform.setIdentity();
+                    startTransform.setOrigin(new Ammo.btVector3(25, 0, 0));
+                    const motionState = new Ammo.btDefaultMotionState(startTransform);
+                    const rbInfo = new Ammo.btRigidBodyConstructionInfo(0, motionState, wedgeShape, new Ammo.btVector3(0, 0, 0));
+                    const wedgeBody = new Ammo.btRigidBody(rbInfo);
+                    world.addRigidBody(wedgeBody);
+                    Ammo.destroy(startTransform);
+                    Ammo.destroy(rbInfo);
+
+                    // const axesHelper = new THREE.AxesHelper(10);
+                    // scene.add(axesHelper);
+
+                    this.updateParameters(params);
+                    return [{ mesh: this.state.wedgeMesh, body: wedgeBody, cameraTarget: new THREE.Vector3(25, 0, 0) }];
+                },
+                updateParameters: function(params) {
+                    this.state.mach = params.mach;
+                    this.state.wedgeAngle = params.wedgeAngle;
+                    this.state.P1 = params.P1;
+                    this.state.rho1 = params.rho1;
+                    this.state.T1 = params.T1;
+                    this.state.gamma = params.gamma;
+                    this.state.timeScale = params.timeScale || simulationConfig.defaultTimeScale;
+
+                    if (this.state.wedgeMesh) {
+                        const wedgeVertices = new Float32Array([
+                            0, 0, 0,
+                            50, 0, 0,
+                            50, 50 * Math.tan(params.wedgeAngle * Math.PI / 180), 0
+                        ]);
+                        this.state.wedgeMesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(wedgeVertices, 3));
+                        this.state.wedgeMesh.geometry.attributes.position.needsUpdate = true;
+                    }
+
+                    if (this.state.outflowParticles) {
+                        const outflowPositions = this.state.outflowParticles.geometry.attributes.position.array;
+                        const betaRad = this.state.shockAngle * Math.PI / 180;
+                        for (let i = 0; i < outflowPositions.length / 3; i++) {
+                            const x = 25 +  Math.random() * 50 * Math.cos(params.wedgeAngle * Math.PI / 180);
+                            outflowPositions[i * 3] = x;
+                            outflowPositions[i * 3 + 1] = Math.random() * ( (x - 25) * Math.tan(betaRad) - (x - 25) * Math.tan(params.wedgeAngle * Math.PI / 180) ) + (x - 25) * Math.tan(params.wedgeAngle * Math.PI / 180); // y: [(x-25)*tan(beta), (x-25)*tan(theta)]
+                            outflowPositions[i * 3 + 2] = 0;
+                        }
+                        this.state.outflowParticles.geometry.attributes.position.needsUpdate = true;
+                    }
+
+                    this.state.shockAngle = solveShockAngle(params.mach, params.wedgeAngle, this.state.gamma);
+
+                    const betaRad = this.state.shockAngle * Math.PI / 180;
+                    const thetaRad = this.state.wedgeAngle * Math.PI / 180;
+                    const Mn1 = params.mach * Math.sin(betaRad);
+                    const Mn2Squared = (Mn1 ** 2 + 2 / (this.state.gamma - 1)) / ((2 * this.state.gamma / (this.state.gamma - 1)) * Mn1 ** 2 - 1);
+                    const Mn2 = Math.sqrt(Mn2Squared);
+                    
+                    this.state.downstreamMach = Mn2 / Math.sin(betaRad - thetaRad);
+                    this.state.densityRatio = ((this.state.gamma + 1) * Mn1 ** 2) / ((this.state.gamma - 1) * Mn1 ** 2 + 2);
+                },
+                update: function(objects) {
+                    this.state.currentTime += simulationConfig.defaultUpdateInterval * this.state.timeScale;
+
+                    const betaRad = this.state.shockAngle * Math.PI / 180;
+                    const thetaRad = this.state.wedgeAngle * Math.PI / 180;
+                    const shockLength = 65;
+                    const shockVertices = new Float32Array([
+                        25, 0, 0,
+                        25 + shockLength * Math.cos(betaRad), shockLength * Math.sin(betaRad), 0
+                    ]);
+                    this.state.shockLine.geometry.setAttribute('position', new THREE.Float32BufferAttribute(shockVertices, 3));
+                    this.state.shockLine.geometry.attributes.position.needsUpdate = true;
+
+                    const baseSpeed = 20*this.state.timeScale;
+                    const inflowSpeed = baseSpeed * this.state.mach;
+                    const outflowSpeed = baseSpeed * this.state.downstreamMach;
+                    const shockSlope = Math.tan(betaRad);
+
+                    const inflowPositions = this.state.inflowParticles.geometry.attributes.position.array;
+                    for (let i = 0; i < inflowPositions.length / 3; i++) {
+                        let x = inflowPositions[i * 3];
+                        let y = inflowPositions[i * 3 + 1];
+                        x += (inflowSpeed * simulationConfig.defaultUpdateInterval);
+                        const shockY = (x - 25) * shockSlope;
+                        const wedgeY = (x-25) * Math.tan(thetaRad);
+                        
+                        if(x >= 75){
+                            x = 0;
+                            y = Math.random() * 50;
+                        }
+                        else if (x>25)
+                            if(y <= shockY){
+                                x = 0;
+                                y = Math.random() * 50;
+                            }
+                        
+                        
+            
+                        inflowPositions[i * 3] = x;
+                        inflowPositions[i * 3 + 1] = y;
+                        inflowPositions[i * 3 + 2] = 0;
+                    }
+                    this.state.inflowParticles.geometry.attributes.position.needsUpdate = true;
+
+                    const outflowPositions = this.state.outflowParticles.geometry.attributes.position.array;
+                    for (let i = 0; i < outflowPositions.length / 3; i++) {
+                        let x = outflowPositions[i * 3];
+                        let y = outflowPositions[i * 3 + 1];
+                        x += outflowSpeed * simulationConfig.defaultUpdateInterval * Math.cos(thetaRad);
+                        y += outflowSpeed * simulationConfig.defaultUpdateInterval * Math.sin(thetaRad);
+                        const shockY = (x - 25) * Math.tan(betaRad);
+                        const wedgeY = (x - 25) * Math.tan(thetaRad);
+
+
+                        if (x >= 75) {
+                            x = 25 +  Math.random() * 50 * Math.cos(thetaRad);
+                            y = (x - 25) * Math.tan(betaRad);
+                        }
+                        outflowPositions[i * 3] = x;
+                        outflowPositions[i * 3 + 1] = y;
+                        outflowPositions[i * 3 + 2] = 0;
+                    }
+                    this.state.outflowParticles.geometry.attributes.position.needsUpdate = true;
+                },
+                getTelemetry: function(objects) {
+                    const M1 = this.state.mach;
+                    const theta = this.state.wedgeAngle;
+                    const gamma = this.state.gamma;
+                    const beta = this.state.shockAngle;
+                    const betaRad = beta * Math.PI / 180;
+                    const thetaRad = theta * Math.PI / 180;
+
+                    const Mn1 = M1 * Math.sin(betaRad);
+                    const Mn2Squared = (Mn1 ** 2 + 2 / (gamma - 1)) / ((2 * gamma / (gamma - 1)) * Mn1 ** 2 - 1);
+                    const M2 = isNaN(Mn2Squared) || Mn2Squared <= 0 ? 0 : Math.sqrt(Mn2Squared) / Math.sin(betaRad - thetaRad);
+                    const pressureRatio = 1 + (2 * gamma / (gamma + 1)) * (Mn1 ** 2 - 1);
+                    const densityRatio = ((gamma + 1) * Mn1 ** 2) / ((gamma - 1) * Mn1 ** 2 + 2);
+                    const temperatureRatio = pressureRatio / densityRatio;
+                    const P2 = this.state.P1 * pressureRatio / 1000;
+                    const rho2 = this.state.rho1 * densityRatio;
+                    const T2 = this.state.T1 * temperatureRatio;
+
+                    return {
+                        'Time': { value: this.state.currentTime.toFixed(1), unit: 's' },
+                        'Simulation Speed': { value: this.state.timeScale.toFixed(2), unit: 'x' },
+                        'Shock Angle': { value: beta.toFixed(2), unit: 'deg' },
+                        'Downstream Mach': { value: M2.toFixed(2), unit: '' },
+                        'Downstream Pressure': { value: P2.toFixed(2), unit: 'kPa' },
+                        'Downstream Density': { value: rho2.toFixed(2), unit: 'kg/m³' },
+                        'Downstream Temperature': { value: T2.toFixed(2), unit: 'K' },
+                        'Pressure Ratio': { value: pressureRatio.toFixed(2), unit: '' },
+                        'Density Ratio': { value: densityRatio.toFixed(2), unit: '' },
+                        'Temperature Ratio': { value: temperatureRatio.toFixed(2), unit: '' }
+                    };
+                }
             })
         }
+
+        function solveShockAngle(M, thetaDeg, gamma) {
+        const thetaRad = thetaDeg * Math.PI / 180;
+        const tolerance = 1e-6;
+        const maxIter = 100;
+
+        // Initial guess (just above theta)
+        let betaRad = thetaRad + 5 * Math.PI / 180;
+
+        function f(beta) {
+            const sinB = Math.sin(beta);
+            const cosB = Math.cos(beta);
+            const tanB = Math.tan(beta);
+            const cos2B = Math.cos(2 * beta);
+            const term1 = 2 * (M * M * sinB * sinB - 1);
+            const term2 = M * M * (gamma + cos2B) + 2;
+            return Math.tan(thetaRad) - (term1 / (tanB * term2));
+        }
+
+        function df(beta) {
+            const sinB = Math.sin(beta);
+            const cosB = Math.cos(beta);
+            const tanB = Math.tan(beta);
+            const sec2B = 1 / (Math.cos(beta) ** 2);
+            const cos2B = Math.cos(2 * beta);
+            const sin2B = Math.sin(2 * beta);
+
+            const term1 = 2 * (M * M * sinB * sinB - 1);
+            const term2 = M * M * (gamma + cos2B) + 2;
+            const d_term1 = 4 * M * M * sinB * cosB;
+            const d_term2 = -2 * M * M * sin2B;
+
+            const num = d_term1 * term2 - term1 * (sec2B * term2 + d_term2 * tanB);
+            const den = term2 * term2 * tanB * tanB;
+            return -num / den;
+        }
+
+        let iter = 0;
+        while (iter < maxIter) {
+            const fval = f(betaRad);
+            const dval = df(betaRad);
+            const next = betaRad - fval / dval;
+
+            if (Math.abs(next - betaRad) < tolerance) break;
+            betaRad = next;
+            iter++;
+        }
+
+        return betaRad * 180 / Math.PI; // return in degrees
+    }
+
+
+        // function solveShockAngle(M, theta, gamma) {
+        //     const thetaRad = theta * Math.PI / 180;
+        //     const tanTheta = Math.tan(thetaRad);
+        //     const tanThetaSq = tanTheta * tanTheta;
+        //     const M_sq = M * M;
+
+        //     const thetaMax = Math.asin(Math.sqrt((1 / M_sq) * ((gamma + 1) * M_sq / 2 - 1))) * 180 / Math.PI;
+        //     if (theta > thetaMax) {
+        //         console.warn('Wedge angle exceeds maximum deflection angle; shock is detached');
+        //         return null;
+        //     }
+
+        //     const denominator = gamma * M_sq * tanThetaSq - 1;
+        //     if (Math.abs(denominator) < 1e-6) {
+        //         console.warn('Invalid denominator in cubic coefficients');
+        //         return null;
+        //     }
+
+        //     const p = (2 - M_sq * (1 + gamma) - 2 * gamma * tanThetaSq) / denominator;
+        //     const q = ((1 + gamma) * M_sq - 2) / denominator;
+        //     const r = (-2 * tanTheta) / denominator;
+
+        //     const a = p;
+        //     const b = q;
+        //     const c = r;
+
+        //     const Q = (3 * b - a * a) / 9;
+        //     const R = (9 * a * b - 27 * c - 2 * a * a * a) / 54;
+        //     const D = Q * Q * Q + R * R;
+
+        //     let beta;
+        //     if (Math.abs(D) < 1e-6) {
+        //         let beta = theta + 1;
+        //         for (let i = 0; i < 50; i++) {
+        //             const betaRad = beta * Math.PI / 180;
+        //             const sinBeta = Math.sin(betaRad);
+        //             const computedTanTheta = (2 / Math.tan(betaRad)) * (M * M * sinBeta * sinBeta - 1) /
+        //                 (M * M * (gamma + Math.cos(2 * betaRad)) + 2);
+        //             const error = computedTanTheta - Math.tan(thetaRad);
+        //             if (Math.abs(error) < 1e-6) break;
+        //             beta += error * 0.1;
+        //         }
+        //         return Math.max(theta, Math.min(90, beta));
+        //     } else if (D < 0) {
+        //         const theta_c = (1 / 3) * Math.acos(R / Math.sqrt(-Q * Q * Q));
+        //         const sqrt_minus_Q = Math.sqrt(-Q);
+        //         const x1 = 2 * sqrt_minus_Q * Math.cos(theta_c) - a / 3;
+        //         const x2 = 2 * sqrt_minus_Q * Math.cos(theta_c + (2 * Math.PI / 3)) - a / 3;
+        //         const x3 = 2 * sqrt_minus_Q * Math.cos(theta_c + (4 * Math.PI / 3)) - a / 3;
+
+        //         const betas = [x1, x2, x3]
+        //             .filter(x => x > 0)
+        //             .map(x => Math.atan(x) * 180 / Math.PI)
+        //             .filter(b => b > theta && b < 90);
+
+        //         beta = betas.length > 0 ? Math.min(...betas) : null;
+        //     } else {
+        //         console.warn('Single real root or complex roots detected');
+        //         return null;
+        //     }
+
+        //     return beta !== null ? Math.max(theta, Math.min(90, beta)) : null;
+        // }
 
         function init() {
             scene = new THREE.Scene();
@@ -1348,6 +1774,7 @@
             document.querySelectorAll('.sim-item.active').forEach(i => i.classList.remove('active'));
             document.getElementById('simulation-list-container').classList.remove('constrained');
             document.getElementById('viewport-placeholder').classList.remove('hidden');
+            document.getElementById('viewport-placeholder').innerHTML = '<div class="text-center"> <i data-lucide="scan-eye" class="h-16 w-16 sm:h-24 sm:w-24 mx-auto mb-4"></i> <p class="text-lg sm:text-xl">VIEWER OFFLINE</p> <p>Select a simulator from the list to begin.</p> </div>';
             document.getElementById('telemetry-placeholder').classList.remove('hidden');
             document.getElementById('active-sim-controls').classList.add('hidden');
             document.getElementById('active-sim-telemetry').classList.add('hidden');
@@ -1356,6 +1783,7 @@
             cleanupSimulation();
             setEngineStatus(false);
             onWindowResize();
+            lucide.createIcons();
         }
 
         function cleanupSimulation() {
